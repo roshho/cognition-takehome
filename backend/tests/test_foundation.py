@@ -47,7 +47,7 @@ class TestRoleEnforcement:
         headers = login(client, "priya")
         res = client.get("/api/users", headers=headers)
         assert res.status_code == 200
-        assert {u["username"] for u in res.json()} == {"rana", "kwon", "priya"}
+        assert {u["username"] for u in res.json()} == {"rana", "kwon", "priya", "marco"}
 
     def test_tools_are_filtered_by_role(self, client):
         reviewer_tools = client.get("/api/tools", headers=login(client, "rana")).json()

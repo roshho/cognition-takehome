@@ -176,7 +176,7 @@ export default function RefundsPage() {
                 <span className="action-cell">
                   <button
                     className="btn small"
-                    disabled={r.requires_admin && user?.role !== "admin"}
+                    disabled={(r.requires_admin && user?.role !== "admin") || user?.role === "read_only"}
                     title={
                       r.requires_admin && user?.role !== "admin"
                         ? "Requires an admin"
@@ -188,7 +188,7 @@ export default function RefundsPage() {
                   </button>
                   <button
                     className="btn small"
-                    disabled={r.requires_admin && user?.role !== "admin"}
+                    disabled={(r.requires_admin && user?.role !== "admin") || user?.role === "read_only"}
                     onClick={() => decide(r.id, "deny")}
                   >
                     Deny

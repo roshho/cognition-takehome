@@ -3,6 +3,8 @@ from typing import Callable
 
 from fastapi import Depends, Header, HTTPException, status
 
+from portal_platform.rbac import has_permission
+
 from .db import get_db
 
 
@@ -33,6 +35,20 @@ def require_role(*roles: str) -> Callable:
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
                 f"Role '{user['role']}' is not allowed to perform this action",
+            )
+        return user
+
+    return dependency
+
+
+def require_permission(permission: str) -> Callable:
+    """RBAC enforcement — every endpoint picks its permission; the backend
+    checks it server-side on every call (UI hiding is only cosmetic)."""
+    def dependency(user: dict = Depends(get_current_user)) -> dict:
+        if not has_permission(user["role"], permission):
+            raise HTTPException(
+                status.HTTP_403_FORBIDDEN,
+                f"Role '{user['role']}' lacks permission '{permission}'",
             )
         return user
 

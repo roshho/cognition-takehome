@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../api/client";
+import { api, API_BASE } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { Form, FormField } from "../components/Form";
 
@@ -15,9 +15,13 @@ export default function LoginPage() {
   const { user, login } = useAuth();
   const navigate = useNavigate();
   const [users, setUsers] = useState<SeedUser[]>([]);
+  const [oidcEnabled, setOidcEnabled] = useState(false);
   const [username, setUsername] = useState("");
 
   useEffect(() => {
+    api.GET("/api/auth/mode").then(({ data }) => {
+      if (data && (data as { oidc?: boolean }).oidc) setOidcEnabled(true);
+    });
     api.GET("/api/auth/users").then(({ data }) => {
       if (data) {
         setUsers(data as SeedUser[]);
@@ -46,6 +50,17 @@ export default function LoginPage() {
         <p className="muted">
           Proof of concept — no password. Production would use the company SSO.
         </p>
+        {oidcEnabled && (
+          <button
+            type="button"
+            className="btn primary"
+            onClick={() => {
+              window.location.href = `${API_BASE}/api/auth/oidc/login`;
+            }}
+          >
+            Sign in with company SSO
+          </button>
+        )}
         <FormField label="User">
           <select
             className="input"

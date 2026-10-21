@@ -10,21 +10,21 @@ TOOLS = [
         "name": "KYC review queue",
         "description": "Work the onboarding review queue: verify documents, screening hits, approve or reject.",
         "path": "/kyc",
-        "roles": ["reviewer", "admin"],
+        "roles": ["reviewer", "admin", "read_only"],
     },
     {
         "id": "refunds",
         "name": "Refunds",
         "description": "Approve or deny refund requests. Large refunds need an admin.",
         "path": "/refunds",
-        "roles": ["reviewer", "admin"],
+        "roles": ["reviewer", "admin", "read_only"],
     },
     {
         "id": "feature-flags",
         "name": "Feature flags",
         "description": "Toggle flags per environment; every change lands in the audit log.",
         "path": "/flags",
-        "roles": ["reviewer", "admin"],
+        "roles": ["reviewer", "admin", "read_only"],
     },
     {
         "id": "directory",
@@ -38,6 +38,6 @@ TOOLS = [
         "name": "Audit trail",
         "description": "See the audit log — admins see everything, reviewers see their own actions.",
         "path": "/audit",
-        "roles": ["reviewer", "admin"],
+        "roles": ["reviewer", "admin", "read_only"],
     },
 ]

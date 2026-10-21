@@ -2,13 +2,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from ..audit import write_audit
-from ..auth import require_role
+from portal_platform.rbac import has_permission
+
+from ..auth import require_permission
 from ..db import get_db
 from ..refunds import ADMIN_THRESHOLD_CENTS
 
 router = APIRouter(prefix="/api/refunds", tags=["refunds"])
 
-refunds_user = require_role("reviewer", "admin")
+refunds_read = require_permission("refunds.read")
+refunds_decide = require_permission("refunds.decide")
 
 
 class RefundOut(BaseModel):
@@ -51,7 +54,7 @@ def list_refunds(
     status: str | None = None,
     min_amount: int | None = None,
     max_amount: int | None = None,
-    user: dict = Depends(refunds_user),
+    user: dict = Depends(refunds_read),
 ):
     q = "SELECT * FROM refunds WHERE 1=1"
     params: list = []
@@ -71,7 +74,7 @@ def list_refunds(
 
 
 @router.get("/stats", response_model=RefundStats)
-def stats(user: dict = Depends(refunds_user)):
+def stats(user: dict = Depends(refunds_read)):
     with get_db() as conn:
         rows = conn.execute(
             "SELECT status, COUNT(*) c, COALESCE(SUM(amount_cents), 0) amt"
@@ -102,7 +105,7 @@ def _decide(refund_id: int, verb: str, new_status: str, body: DecideRequest, use
                 status.HTTP_409_CONFLICT,
                 f"Refund is already {refund['status']}",
             )
-        if refund["amount_cents"] >= ADMIN_THRESHOLD_CENTS and user["role"] != "admin":
+        if refund["amount_cents"] >= ADMIN_THRESHOLD_CENTS and not has_permission(user["role"], "refunds.decide_large"):
             raise HTTPException(
                 status.HTTP_403_FORBIDDEN,
                 f"Refunds over ${ADMIN_THRESHOLD_CENTS / 100:,.0f} require an admin",
@@ -130,11 +133,11 @@ def _decide(refund_id: int, verb: str, new_status: str, body: DecideRequest, use
 
 @router.post("/{refund_id}/approve")
 def approve(refund_id: int, body: DecideRequest | None = None,
-            user: dict = Depends(refunds_user)):
+            user: dict = Depends(refunds_decide)):
     return _decide(refund_id, "approve", "approved", body or DecideRequest(), user)
 
 
 @router.post("/{refund_id}/deny")
 def deny(refund_id: int, body: DecideRequest | None = None,
-         user: dict = Depends(refunds_user)):
+         user: dict = Depends(refunds_decide)):
     return _decide(refund_id, "deny", "denied", body or DecideRequest(), user)

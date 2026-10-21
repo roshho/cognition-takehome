@@ -1,21 +1,25 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from ..audit import write_audit
-from ..auth import require_role
-from ..db import get_db
+from portal_platform.adapters import get_repository
+
+from ..auth import require_permission
 from ..kyc import (
     ESCALATE_REASON_CODES,
     REJECT_REASON_CODES,
-    case_row,
     mask_pii,
     required_approvals,
 )
 
 router = APIRouter(prefix="/api/kyc", tags=["kyc"])
 
-# Both roles may work the queue; per-action rules (four-eyes etc.) still apply.
-kyc_user = require_role("reviewer", "admin")
+# Reads need kyc.read (reviewer, admin, read_only); mutations need
+# kyc.decide (reviewer, admin). Enforced server-side on every call.
+kyc_read = require_permission("kyc.read")
+kyc_decide = require_permission("kyc.decide")
+kyc_unmask = require_permission("kyc.unmask")
 
 
 class KycCaseListItem(BaseModel):
@@ -54,7 +58,6 @@ class NoteOut(BaseModel):
 
 
 class KycCaseDetail(KycCaseListItem):
-    # applicant PII — masked
     dob: str
     email: str
     phone: str
@@ -82,23 +85,35 @@ class NoteRequest(BaseModel):
     body: str
 
 
-def get_open_case(conn, case_id: int):
-    row = conn.execute("SELECT * FROM kyc_cases WHERE id = ?", (case_id,)).fetchone()
-    if row is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Case not found")
-    return case_row(conn, row)
+def _now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def require_open(case: dict):
-    if case["status"] != "open":
+def require_actionable(case: dict, user: dict):
+    """Open cases are actionable by anyone with kyc.decide; escalated cases
+    only by admins (senior review). Decided cases are final for everyone."""
+    if case["status"] == "open":
+        return
+    if case["status"] == "escalated" and user["role"] == "admin":
+        return
+    raise HTTPException(
+        status.HTTP_409_CONFLICT,
+        f"Case is {case['status']} — cannot be actioned by your role",
+    )
+
+
+def deny_if_escalated_by(repo, tx, case_id: int, user: dict):
+    """Separation of duties: nobody decides a case they themselves
+    escalated — a second pair of eyes must take it."""
+    if repo.has_escalated(tx, case_id, user["username"]):
         raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            f"Case is {case['status']} — only open cases can be actioned",
+            status.HTTP_403_FORBIDDEN,
+            "You escalated this case — a different reviewer must decide it",
         )
 
 
 @router.get("/reason-codes")
-def reason_codes(user: dict = Depends(kyc_user)):
+def reason_codes(user: dict = Depends(kyc_read)):
     return {"reject": REJECT_REASON_CODES, "escalate": ESCALATE_REASON_CODES}
 
 
@@ -107,60 +122,38 @@ def list_cases(
     status: str | None = None,
     min_risk: int | None = None,
     max_risk: int | None = None,
-    user: dict = Depends(kyc_user),
+    user: dict = Depends(kyc_read),
 ):
-    q = "SELECT * FROM kyc_cases WHERE 1=1"
-    params: list = []
-    if status:
-        q += " AND status = ?"
-        params.append(status)
-    if min_risk is not None:
-        q += " AND risk_score >= ?"
-        params.append(min_risk)
-    if max_risk is not None:
-        q += " AND risk_score <= ?"
-        params.append(max_risk)
-    q += " ORDER BY created_at"
-    with get_db() as conn:
-        rows = conn.execute(q, params).fetchall()
-        cases = [case_row(conn, r) for r in rows]
+    repo = get_repository()
+    cases = repo.list_cases(status=status, min_risk=min_risk, max_risk=max_risk)
     # SLA breaches first, then highest risk
     cases.sort(key=lambda c: (not c["sla_breached"], -c["risk_score"]))
     return cases
 
 
 @router.get("/cases/{case_id}", response_model=KycCaseDetail)
-def get_case(case_id: int, user: dict = Depends(kyc_user)):
-    with get_db() as conn:
-        case = get_open_case(conn, case_id)
-        masked = mask_pii(case)
-        docs = conn.execute(
-            "SELECT id, doc_type, filename FROM kyc_documents WHERE case_id = ?",
-            (case_id,),
-        ).fetchall()
-        hits = conn.execute(
-            "SELECT id, hit_type, match_name, score, summary FROM kyc_screening_hits"
-            " WHERE case_id = ?",
-            (case_id,),
-        ).fetchall()
-        notes = conn.execute(
-            "SELECT id, author, body, created_at FROM kyc_notes WHERE case_id = ?"
-            " ORDER BY id",
-            (case_id,),
-        ).fetchall()
-    masked["documents"] = [dict(d) for d in docs]
-    masked["hits"] = [dict(h) for h in hits]
-    masked["notes"] = [dict(n) for n in notes]
+def get_case(case_id: int, user: dict = Depends(kyc_read)):
+    repo = get_repository()
+    case = repo.get_case(case_id)
+    if case is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Case not found")
+    masked = mask_pii(case)
+    masked["documents"] = repo.get_documents(case_id)
+    masked["hits"] = repo.get_hits(case_id)
+    masked["notes"] = repo.get_notes(case_id)
     return masked
 
 
 @router.post("/cases/{case_id}/unmask", response_model=PiiOut)
-def unmask_pii(case_id: int, user: dict = Depends(kyc_user)):
+def unmask_pii(case_id: int, user: dict = Depends(kyc_unmask)):
     """Reveal applicant PII — audited, because reading PII is a decision too."""
-    with get_db() as conn:
-        case = get_open_case(conn, case_id)
-        write_audit(
-            conn,
+    repo = get_repository()
+    with repo.transaction() as tx:
+        case = repo.get_case(case_id, tx)
+        if case is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Case not found")
+        repo.write_audit(
+            tx,
             actor=user["username"],
             action="kyc.unmask_pii",
             entity="kyc_case",
@@ -177,16 +170,16 @@ def unmask_pii(case_id: int, user: dict = Depends(kyc_user)):
 
 
 @router.post("/cases/{case_id}/assign")
-def assign_to_me(case_id: int, user: dict = Depends(kyc_user)):
-    with get_db() as conn:
-        case = get_open_case(conn, case_id)
-        require_open(case)
-        conn.execute(
-            "UPDATE kyc_cases SET assignee = ? WHERE id = ?",
-            (user["username"], case_id),
-        )
-        write_audit(
-            conn,
+def assign_to_me(case_id: int, user: dict = Depends(kyc_decide)):
+    repo = get_repository()
+    with repo.transaction() as tx:
+        case = repo.get_case(case_id, tx)
+        if case is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Case not found")
+        require_actionable(case, user)
+        repo.update_case(tx, case_id, {"assignee": user["username"]})
+        repo.write_audit(
+            tx,
             actor=user["username"],
             action="kyc.assign",
             entity="kyc_case",
@@ -198,22 +191,24 @@ def assign_to_me(case_id: int, user: dict = Depends(kyc_user)):
 
 
 @router.post("/cases/{case_id}/approve")
-def approve(case_id: int, user: dict = Depends(kyc_user)):
+def approve(case_id: int, user: dict = Depends(kyc_decide)):
     """Approve a case. High-risk cases (score >= 70) need two distinct
-    approvers — the four-eyes rule. Nobody can be both pairs of eyes."""
-    with get_db() as conn:
-        case = get_open_case(conn, case_id)
-        require_open(case)
+    approvers — the four-eyes rule. Nobody can be both pairs of eyes, and
+    nobody may decide a case they escalated."""
+    repo = get_repository()
+    with repo.transaction() as tx:
+        case = repo.get_case(case_id, tx)
+        if case is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Case not found")
+        deny_if_escalated_by(repo, tx, case_id, user)
+        require_actionable(case, user)
         if user["username"] in case["approvals"]:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
                 "You already approved this case — a second reviewer is required",
             )
         try:
-            conn.execute(
-                "INSERT INTO kyc_approvals (case_id, actor) VALUES (?, ?)",
-                (case_id, user["username"]),
-            )
+            repo.add_approval(tx, case_id, user["username"])
         except Exception:
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
@@ -222,13 +217,11 @@ def approve(case_id: int, user: dict = Depends(kyc_user)):
         approvals = case["approvals"] + [user["username"]]
         fully_approved = len(approvals) >= required_approvals(case["risk_score"])
         if fully_approved:
-            conn.execute(
-                "UPDATE kyc_cases SET status = 'approved', decided_at = datetime('now')"
-                " WHERE id = ?",
-                (case_id,),
+            repo.update_case(
+                tx, case_id, {"status": "approved", "decided_at": _now()}
             )
-        write_audit(
-            conn,
+        repo.write_audit(
+            tx,
             actor=user["username"],
             action="kyc.approve",
             entity="kyc_case",
@@ -243,7 +236,7 @@ def approve(case_id: int, user: dict = Depends(kyc_user)):
         "ok": True,
         "approvals": approvals,
         "approvals_required": required_approvals(case["risk_score"]),
-        "status": "approved" if fully_approved else "open",
+        "status": "approved" if fully_approved else case["status"],
         "awaiting_second_reviewer": not fully_approved,
     }
 
@@ -255,15 +248,18 @@ def _decide(case_id: int, verb: str, new_status: str, body: ReasonRequest,
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             f"reason_code must be one of: {', '.join(allowed)}",
         )
-    with get_db() as conn:
-        case = get_open_case(conn, case_id)
-        require_open(case)
-        conn.execute(
-            "UPDATE kyc_cases SET status = ?, decided_at = datetime('now') WHERE id = ?",
-            (new_status, case_id),
-        )
-        write_audit(
-            conn,
+    repo = get_repository()
+    with repo.transaction() as tx:
+        case = repo.get_case(case_id, tx)
+        if case is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Case not found")
+        deny_if_escalated_by(repo, tx, case_id, user)
+        require_actionable(case, user)
+        repo.update_case(tx, case_id, {"status": new_status, "decided_at": _now()})
+        if verb == "escalate":
+            repo.add_escalation(tx, case_id, user["username"], body.reason_code)
+        repo.write_audit(
+            tx,
             actor=user["username"],
             action=f"kyc.{verb}",
             entity="kyc_case",
@@ -275,36 +271,31 @@ def _decide(case_id: int, verb: str, new_status: str, body: ReasonRequest,
 
 
 @router.post("/cases/{case_id}/reject")
-def reject(case_id: int, body: ReasonRequest, user: dict = Depends(kyc_user)):
+def reject(case_id: int, body: ReasonRequest, user: dict = Depends(kyc_decide)):
     return _decide(case_id, "reject", "rejected", body, REJECT_REASON_CODES, user)
 
 
 @router.post("/cases/{case_id}/escalate")
-def escalate(case_id: int, body: ReasonRequest, user: dict = Depends(kyc_user)):
+def escalate(case_id: int, body: ReasonRequest, user: dict = Depends(kyc_decide)):
     return _decide(case_id, "escalate", "escalated", body, ESCALATE_REASON_CODES, user)
 
 
 @router.post("/cases/{case_id}/notes", response_model=NoteOut)
-def add_note(case_id: int, body: NoteRequest, user: dict = Depends(kyc_user)):
+def add_note(case_id: int, body: NoteRequest, user: dict = Depends(kyc_decide)):
     text = body.body.strip()
     if not text:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Note body is empty")
-    with get_db() as conn:
-        get_open_case(conn, case_id)
-        cur = conn.execute(
-            "INSERT INTO kyc_notes (case_id, author, body) VALUES (?, ?, ?)",
-            (case_id, user["username"], text),
-        )
-        write_audit(
-            conn,
+    repo = get_repository()
+    with repo.transaction() as tx:
+        if repo.get_case(case_id, tx) is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Case not found")
+        row = repo.add_note(tx, case_id, user["username"], text)
+        repo.write_audit(
+            tx,
             actor=user["username"],
             action="kyc.add_note",
             entity="kyc_case",
             entity_id=case_id,
             after={"note": text},
         )
-        row = conn.execute(
-            "SELECT id, author, body, created_at FROM kyc_notes WHERE id = ?",
-            (cur.lastrowid,),
-        ).fetchone()
-    return NoteOut(**dict(row))
+    return NoteOut(**row)

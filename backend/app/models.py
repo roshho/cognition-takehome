@@ -38,6 +38,7 @@ class AuditEntryOut(BaseModel):
     before: str | None
     after: str | None
     created_at: str
+    request_id: str | None = None
 
 
 class KycDashboard(BaseModel):

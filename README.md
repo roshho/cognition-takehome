@@ -19,21 +19,27 @@ npm start          # api on :8000, web on :5173
 or, with Docker:
 
 ```bash
-docker compose up --build   # api on :8000, web on :3000
+docker compose up --build   # api on :8000, web on :3000, mock OIDC provider on :9000
 ```
 
-Open http://localhost:5173 (or :3000 with docker). Sign in as a seeded user —
-no password:
+Open http://localhost:5173 (or :3000 with docker). Two ways in:
 
-| User      | Role     |
-| --------- | -------- |
-| `rana`    | reviewer |
-| `kwon`    | reviewer |
-| `priya`   | admin    |
+- **Dev login** — pick a seeded user, no password.
+- **Sign in with company SSO** — OIDC authorization-code flow. Locally this
+  goes to the in-repo mock IdP (also shown on the login page with the SSO
+  button). The mock shows a user picker instead of a password prompt.
+
+| User      | IdP groups    | Role      |
+| --------- | ------------- | --------- |
+| `rana`    | `kyc_reviewer`| reviewer  |
+| `kwon`    | `kyc_reviewer`| reviewer  |
+| `priya`   | `kyc_admin`   | admin     |
+| `marco`   | `read_only`   | read_only |
 
 ## What is NOT built / mocked (out of scope)
 
-- Real SSO — login is pick-a-user, no password
+- Real SSO against a corporate IdP — OIDC is implemented and configurable,
+  but only exercised against the in-repo mock provider
 - Hosting/deploy — only local `npm start` or `docker compose`
 - Document storage — KYC documents are filename placeholders
 - Real screening vendors — sanctions/PEP hits are seeded rows
@@ -83,13 +89,101 @@ no password:
   helper — no shared-code changes were needed beyond Phase 2's
   `rowClassName` prop.
 
+**Production-shaped layer (`backend/portal_platform/`)**
+
+The shared package other apps would import; the app code consumes it:
+
+- **OIDC auth** (`portal_platform/oidc.py`, `config.py`) — authorization-code
+  flow against any issuer configured purely by env vars (nothing tenant-
+  specific hardcoded). `GET /api/auth/oidc/login` redirects to the IdP,
+  `/api/auth/oidc/callback` exchanges the code and verifies the RS256
+  `id_token` signature via the discovered JWKS, then mints the same session
+  token the rest of the app already uses.
+- **Mock OIDC provider** (`backend/mockidp/`) — a tiny FastAPI IdP with
+  discovery, JWKS, authorize (user picker) and token endpoints, issuing real
+  RS256 tokens. Runs as the `idp` service in docker-compose.
+- **Group-claim → role mapping** (`portal_platform/rbac.py`) —
+  `kyc_admin → admin`, `kyc_reviewer → reviewer`, `read_only → read_only`,
+  overrideable via `OIDC_GROUP_MAP_JSON`. Unknown/absent groups get
+  `read_only`.
+- **Backend RBAC** — every router enforces a permission dependency
+  (`require_permission("kyc.decide")` etc.); the UI also hides actions the
+  role can't perform but the backend is the enforcement point. `read_only`
+  can view every tool but mutates nothing. A user who escalated a case
+  cannot later decide it (403); escalated cases are resolvable by admins
+  (senior review).
+- **Audit hardening** (`portal_platform/audit.py`) — `audit_log` rows now
+  carry a `request_id` (set per request by middleware, surfaced as the
+  `x-request-id` response header). The SQLite connection sets an
+  `authorizer` that makes UPDATE/DELETE on `audit_log` fail — the append-
+  only guarantee lives in the DB layer, not convention. Mutations and their
+  audit rows commit in one transaction. PII reads (`unmask`) are audited
+  like writes.
+- **Repository interface** (`portal_platform/repository.py`) — the KYC
+  router only talks to a `KycRepository` protocol (`transaction`,
+  `list_cases`, `get_case`, `update_case`, `add_approval`, `add_escalation`,
+  `has_escalated`, `add_note`, `write_audit`). Two adapters behind
+  `DATA_ADAPTER`:
+  - `sql` — wraps the existing SQLite database (real).
+  - `dataverse` — OData Web API client (`/api/data/v9.2/<entity>`) with
+    client-credentials auth from env vars. Tested against `httpx`
+    `MockTransport` responses only — never against a real Dataverse.
+
+| Env var                    | Meaning                                              |
+| -------------------------- | ---------------------------------------------------- |
+| `OIDC_ISSUER`              | Public issuer URL (browser redirects, `iss` claim)   |
+| `OIDC_INTERNAL_ISSUER`     | Backend-facing issuer URL (defaults to `OIDC_ISSUER`; in compose it's `http://idp:9000` while browsers use `http://localhost:9000`) |
+| `OIDC_CLIENT_ID`           | Client ID registered at the IdP                      |
+| `OIDC_CLIENT_SECRET`       | Client secret (not needed for the mock)              |
+| `OIDC_REDIRECT_URI`        | Callback URL, default `<issuer>:8000/.../callback`   |
+| `OIDC_SCOPE`               | Default `openid profile groups`                      |
+| `OIDC_GROUP_MAP_JSON`      | Optional `{"idp_group": "role"}` override            |
+| `FRONTEND_ORIGIN`          | Where the callback redirects with `?sso_token=`      |
+| `DATA_ADAPTER`             | `sql` (default) or `dataverse`                       |
+| `DATAVERSE_BASE_URL`       | e.g. `https://org.crm.dynamics.com`                  |
+| `DATAVERSE_ENTITY`         | Table prefix/collection, default `mer_kyccases`      |
+| `DATAVERSE_TENANT_ID` / `CLIENT_ID` / `CLIENT_SECRET` / `TOKEN_URL` | Client-credentials for Dataverse |
+| `IDP_ISSUER`               | (mock IdP only) issuer value to publish/sign with    |
+
+## Known gaps — read me
+
+Things that are approximated or stubbed, stated plainly:
+
+1. **SQLite has no role grants.** The "app DB role can't UPDATE/DELETE the
+   audit table" requirement is enforced with `sqlite3.Connection.set_authorizer`
+   — every statement touching `audit_log` that isn't INSERT/SELECT is denied
+   at the driver level (test verifies this). Production Postgres:
+   `REVOKE UPDATE, DELETE ON audit_log FROM app_role;`.
+2. **Dataverse adapter is HTTP-contracted only.** It implements the full
+   repository interface over OData and passes the same contract tests as the
+   SQL adapter, but against mocked responses — field names (`mer_*`), the
+   4-eyes/escalation related-entity shapes, and `$expand` usage are educated
+   guesses that would need verification against a real Dataverse environment.
+3. **No cross-DB transactions on Dataverse.** SQL adapter writes audit in the
+   same sqlite transaction as the mutation. Dataverse Web API has no ambient
+   transaction spanning OData calls, so the adapter's transaction shim writes
+   audit rows to a local sqlite sidecar; production would use Dataverse's
+   `ExecuteTransaction` batch or an outbox.
+4. **OIDC state is in-memory.** Fine for one-process dev; multi-replica
+   deploys need a shared store or signed cookie.
+5. **Dev login remains on.** The pick-a-user endpoint stays enabled so the
+   prototype works with zero config; production would gate it behind
+   `OIDC_ISSUER` being unset or a dev flag.
+6. **Mock IdP issues tokens for any user claim** — it's a password-free
+   picker, not an authentication check.
+7. **Verified, not stubbed**: the full OIDC round trip was exercised live
+   (login → mock IdP → code exchange → RS256/JWKS verification → role
+   mapping → session token works on `/api/me`), and `docker compose` was
+   validated for build-order correctness; the complete image build wasn't
+   re-run due to Docker Hub pull rate-limits on the dev machine.
+
 ## Mocked vs. production
 
 | Mocked here                          | Production would need                        |
 | ------------------------------------ | -------------------------------------------- |
-| Pick-a-user login, bearer tokens     | Real SSO (OIDC/SAML), session management     |
+| Pick-a-user dev login + bearer tokens| OIDC is in — needs a real IdP + MFA + expiry |
 | SQLite file                          | Postgres, migrations, backups                |
-| Role list hardcoded on `users.role`  | RBAC from an identity provider / directory   |
+| Group→role map in env/defaults       | RBAC driven by the enterprise IdP/directory  |
 | Audit log in app DB                  | Tamper-evident store (WORM / immutable logs) |
 | `docker compose` for local dev       | Hosting, deploys, secrets management         |
 | PII "masking" string surgery         | Field-level encryption + access policies     |
@@ -99,16 +193,22 @@ no password:
 ## Known limitations
 
 - Sessions never expire; logout just deletes the token.
-- Audit log has no tamper protection — a DB write can edit history.
+- Audit log is append-only at the driver level but not tamper-evident — a
+  superuser could still rewrite history (production: WORM storage).
 - No document storage, no real screening vendors, no compliance certifications,
   no app-building UI for non-engineers (all out of scope by design).
+- `read_only` maps every seeded permission read but nothing write — it sees
+  all three tools plus the audit trail, no action buttons.
 
 ## Layout
 
 ```
-backend/app/        FastAPI app (auth, audit, tools, routers)
-backend/tests/      pytest: role enforcement, audit logging
-frontend/src/       React app (generated client, shared components, pages)
+backend/app/              FastAPI app (auth, audit, tools, routers)
+backend/portal_platform/  shared package: config, oidc, rbac, audit,
+                          repository interface + sql/dataverse adapters
+backend/mockidp/          mock OIDC provider (discovery, JWKS, RS256 tokens)
+backend/tests/            pytest: role enforcement, audit, adapter contracts
+frontend/src/             React app (generated client, shared components, pages)
 ```
 
 ## Tests

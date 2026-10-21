@@ -51,6 +51,13 @@ CREATE TABLE IF NOT EXISTS kyc_approvals (
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (case_id, actor)
 );
+CREATE TABLE IF NOT EXISTS kyc_escalations (
+    id INTEGER PRIMARY KEY,
+    case_id INTEGER NOT NULL REFERENCES kyc_cases(id),
+    actor TEXT NOT NULL,
+    reason_code TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 """
 
 HIGH_RISK_THRESHOLD = 70

@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from portal_platform.audit import RequestIdMiddleware
+
 from .db import init_db, get_db
 from .flags import seed_flags
 from .kyc import seed_kyc
@@ -36,6 +38,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(RequestIdMiddleware)
 
 app.include_router(auth.router)
 app.include_router(me.router)

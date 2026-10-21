@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 
-from ..auth import get_current_user, require_role
+from ..auth import get_current_user, require_permission
 from ..db import get_db
 from ..flags import ENVIRONMENTS
 from ..kyc import HIGH_RISK_THRESHOLD, SLA_HOURS
@@ -26,7 +26,7 @@ def list_tools(user: dict = Depends(get_current_user)):
 
 
 @router.get("/users", response_model=list[UserOut])
-def list_users(user: dict = Depends(require_role("admin"))):
+def list_users(user: dict = Depends(require_permission("directory.read"))):
     with get_db() as conn:
         rows = conn.execute(
             "SELECT id, username, display_name, role FROM users ORDER BY id"
@@ -35,7 +35,7 @@ def list_users(user: dict = Depends(require_role("admin"))):
 
 
 @router.get("/audit", response_model=list[AuditEntryOut])
-def list_audit(user: dict = Depends(get_current_user)):
+def list_audit(user: dict = Depends(require_permission("audit.read"))):
     """Admins see the full log; reviewers only their own actions."""
     with get_db() as conn:
         if user["role"] == "admin":

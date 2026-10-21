@@ -14,7 +14,8 @@ export function setToken(token: string | null) {
 
 // In dev, "/" is proxied to FastAPI by vite. In the docker image the static
 // build points at the API container's published port via VITE_API_URL.
-const baseUrl = import.meta.env.VITE_API_URL ?? "/";
+export const API_BASE = import.meta.env.VITE_API_URL ?? "";
+const baseUrl = API_BASE || "/";
 
 export const api = createClient<paths>({
   baseUrl,

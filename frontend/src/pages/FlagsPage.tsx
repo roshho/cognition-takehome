@@ -64,12 +64,13 @@ export default function FlagsPage() {
 
   const envCell = (env: (typeof ENVS)[number]) => (f: Flag) => {
     const enabled = f[`enabled_${env}`];
-    const locked = env === "prod" && user?.role !== "admin";
+    const locked =
+      user?.role === "read_only" || (env === "prod" && user?.role !== "admin");
     return (
       <button
         className={`toggle ${enabled ? "on" : "off"}`}
         disabled={locked}
-        title={locked ? "Prod toggles require an admin" : `${env}: ${enabled ? "on" : "off"}`}
+        title={locked ? (user?.role === "read_only" ? "Read-only account" : "Prod toggles require an admin") : `${env}: ${enabled ? "on" : "off"}`}
         onClick={() => toggle(f.key, env)}
       >
         {enabled ? "on" : "off"}

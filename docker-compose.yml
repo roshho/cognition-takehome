@@ -7,6 +7,26 @@ services:
       - portal-data:/data
     environment:
       PORTAL_DB_PATH: /data/portal.db
+      # OIDC: public issuer (browser + `iss` claim) vs internal fetch URL.
+      OIDC_ISSUER: http://localhost:9000
+      OIDC_INTERNAL_ISSUER: http://idp:9000
+      OIDC_CLIENT_ID: portal
+      OIDC_CLIENT_SECRET: ""
+      OIDC_REDIRECT_URI: http://localhost:8000/api/auth/oidc/callback
+      FRONTEND_ORIGIN: http://localhost:3000
+      # "sql" (default) or "dataverse" — see README.
+      DATA_ADAPTER: sql
+    depends_on:
+      - idp
+
+  idp:
+    build: ./backend
+    command: uvicorn mockidp.app:app --host 0.0.0.0 --port 9000
+    ports:
+      - "9000:9000"
+    environment:
+      # `iss` claim + discovery doc advertise the browser-reachable URL.
+      IDP_ISSUER: http://localhost:9000
 
   web:
     build:

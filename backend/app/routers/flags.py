@@ -2,13 +2,17 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from ..audit import write_audit
-from ..auth import require_role
+from portal_platform.rbac import has_permission
+
+from ..auth import require_permission
 from ..db import get_db
 from ..flags import ENVIRONMENTS
 
 router = APIRouter(prefix="/api/flags", tags=["flags"])
 
-flags_user = require_role("reviewer", "admin")
+flags_read = require_permission("flags.read")
+flags_toggle = require_permission("flags.toggle")
+flags_toggle_prod = require_permission("flags.toggle_prod")
 
 
 class FlagOut(BaseModel):
@@ -41,22 +45,23 @@ def flag_row(row) -> dict:
 
 
 @router.get("", response_model=list[FlagOut])
-def list_flags(user: dict = Depends(flags_user)):
+def list_flags(user: dict = Depends(flags_read)):
     with get_db() as conn:
         rows = conn.execute("SELECT * FROM feature_flags ORDER BY key").fetchall()
     return [flag_row(r) for r in rows]
 
 
 @router.post("/{key}/toggle", response_model=FlagOut)
-def toggle(key: str, body: ToggleRequest, user: dict = Depends(flags_user)):
+def toggle(key: str, body: ToggleRequest, user: dict = Depends(flags_toggle)):
     env = body.environment
     if env not in ENVIRONMENTS:
         raise HTTPException(
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             f"environment must be one of: {', '.join(ENVIRONMENTS)}",
         )
-    # prod toggles are admin-only; dev/staging are open to both roles.
-    if env == "prod" and user["role"] != "admin":
+    # prod toggles need the flags.toggle_prod permission (admin-only
+    # by default); dev/staging are open to anyone with flags.toggle.
+    if env == "prod" and not has_permission(user["role"], "flags.toggle_prod"):
         raise HTTPException(
             status.HTTP_403_FORBIDDEN,
             "Toggling production flags requires an admin",
@@ -85,7 +90,7 @@ def toggle(key: str, body: ToggleRequest, user: dict = Depends(flags_user)):
 
 
 @router.get("/{key}/history", response_model=list[FlagHistoryEntry])
-def history(key: str, user: dict = Depends(flags_user)):
+def history(key: str, user: dict = Depends(flags_read)):
     """Change history for a flag — straight from the shared audit log."""
     with get_db() as conn:
         rows = conn.execute(

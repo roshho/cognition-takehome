@@ -149,10 +149,12 @@ export default function KycCasePage() {
               ))}
             </tbody>
           </table>
-          {!pii ? (
+          {!pii && user?.role !== "read_only" ? (
             <button className="btn" onClick={unmask}>
               Reveal PII <span className="muted">(audited)</span>
             </button>
+          ) : user?.role === "read_only" ? (
+            <p className="muted">PII reveal is not available for read-only accounts.</p>
           ) : (
             <p className="muted">PII revealed — this was written to the audit log.</p>
           )}
@@ -185,7 +187,7 @@ export default function KycCasePage() {
         </section>
       </div>
 
-      {isOpen && (
+      {isOpen && user?.role !== "read_only" && (
         <section className="card actions">
           <h3>Actions</h3>
           {error && <p className="form-error">{error}</p>}
@@ -250,6 +252,7 @@ export default function KycCasePage() {
             {n.body}
           </p>
         ))}
+        {user?.role !== "read_only" && (
         <div className="note-add">
           <input
             className="input"
@@ -261,6 +264,7 @@ export default function KycCasePage() {
             Add note
           </button>
         </div>
+        )}
       </section>
     </div>
   );

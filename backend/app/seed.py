@@ -4,6 +4,7 @@ USERS = [
     ("rana", "Rana Alvarez", "reviewer"),
     ("kwon", "Min-Jae Kwon", "reviewer"),
     ("priya", "Priya Natarajan", "admin"),
+    ("marco", "Marco Reyes", "read_only"),
 ]
 
 

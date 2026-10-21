@@ -40,6 +40,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // SSO handoff: the OIDC callback lands here with ?sso_token=...
+    const params = new URLSearchParams(window.location.search);
+    const sso = params.get("sso_token");
+    if (sso) {
+      setToken(sso);
+      params.delete("sso_token");
+      const q = params.toString();
+      window.history.replaceState(
+        {},
+        "",
+        window.location.pathname + (q ? `?${q}` : "") + window.location.hash
+      );
+    }
     void refresh();
   }, [refresh]);
 
