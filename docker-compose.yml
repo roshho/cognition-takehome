@@ -9,7 +9,9 @@ services:
       PORTAL_DB_PATH: /data/portal.db
 
   web:
-    build: ./frontend
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
     ports:
       - "3000:3000"
     depends_on:
