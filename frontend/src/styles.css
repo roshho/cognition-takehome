@@ -57,9 +57,33 @@ h3 { margin: 0 0 8px; }
   gap: 16px;
   margin-top: 16px;
 }
-.tool-card { text-decoration: none; color: var(--text); transition: box-shadow 0.15s; }
+.tool-card { text-decoration: none; color: var(--text); transition: box-shadow 0.15s; display: flex; flex-direction: column; }
 .tool-card:hover { box-shadow: 0 4px 14px rgba(20, 40, 70, 0.12); }
-.tool-open { color: var(--accent); font-size: 13px; font-weight: 600; }
+.tool-open { color: var(--accent); font-size: 13px; font-weight: 600; margin-top: auto; }
+
+/* Dashboard */
+.dash-header { margin-bottom: 4px; }
+.stat-strip { display: flex; gap: 8px; margin: 10px 0 12px; flex-wrap: wrap; }
+.stat-box {
+  flex: 1; min-width: 64px; text-align: center; padding: 8px 6px;
+  background: #f4f7fb; border: 1px solid var(--border); border-radius: 8px;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.stat-num { font-size: 18px; font-weight: 700; line-height: 1.1; }
+.stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.3px; }
+.stat-warn .stat-num { color: #8a6d00; }
+.stat-warn { background: #fff8e3; }
+.stat-danger .stat-num { color: var(--danger); }
+.stat-danger { background: #fdeceb; }
+.activity-card { margin-top: 20px; padding: 16px 20px; }
+.activity-head { display: flex; justify-content: space-between; align-items: baseline; }
+.activity-head h3 { margin: 0; }
+.activity-head a { font-size: 13px; color: var(--accent); text-decoration: none; font-weight: 600; }
+.activity-list { list-style: none; margin: 8px 0 0; padding: 0; }
+.activity-row {
+  display: flex; justify-content: space-between; gap: 16px; padding: 8px 0;
+  border-top: 1px solid var(--border); font-size: 13px;
+}
 
 /* Badges */
 .role-badge {

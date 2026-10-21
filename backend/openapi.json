@@ -389,6 +389,56 @@
         }
       }
     },
+    "/api/dashboard/summary": {
+      "get": {
+        "tags": [
+          "core"
+        ],
+        "summary": "Dashboard Summary",
+        "description": "Role-aware per-tool stats for the home dashboard.",
+        "operationId": "dashboard_summary_api_dashboard_summary_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/kyc/reason-codes": {
       "get": {
         "tags": [
@@ -1535,6 +1585,52 @@
         ],
         "title": "AuditEntryOut"
       },
+      "DashboardSummary": {
+        "properties": {
+          "kyc": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/KycDashboard"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refunds": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RefundsDashboard"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "flags": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FlagsDashboard"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recent_activity": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEntryOut"
+            },
+            "type": "array",
+            "title": "Recent Activity"
+          }
+        },
+        "type": "object",
+        "required": [
+          "recent_activity"
+        ],
+        "title": "DashboardSummary"
+      },
       "DecideRequest": {
         "properties": {
           "reason": {
@@ -1664,6 +1760,27 @@
           "enabled_prod"
         ],
         "title": "FlagOut"
+      },
+      "FlagsDashboard": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "enabled": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "enabled"
+        ],
+        "title": "FlagsDashboard"
       },
       "HTTPValidationError": {
         "properties": {
@@ -1918,6 +2035,34 @@
         ],
         "title": "KycCaseListItem"
       },
+      "KycDashboard": {
+        "properties": {
+          "open_cases": {
+            "type": "integer",
+            "title": "Open Cases"
+          },
+          "sla_breached": {
+            "type": "integer",
+            "title": "Sla Breached"
+          },
+          "high_risk_open": {
+            "type": "integer",
+            "title": "High Risk Open"
+          },
+          "assigned_to_me": {
+            "type": "integer",
+            "title": "Assigned To Me"
+          }
+        },
+        "type": "object",
+        "required": [
+          "open_cases",
+          "sla_breached",
+          "high_risk_open",
+          "assigned_to_me"
+        ],
+        "title": "KycDashboard"
+      },
       "LoginRequest": {
         "properties": {
           "username": {
@@ -2159,6 +2304,29 @@
           "admin_threshold_cents"
         ],
         "title": "RefundStats"
+      },
+      "RefundsDashboard": {
+        "properties": {
+          "pending_count": {
+            "type": "integer",
+            "title": "Pending Count"
+          },
+          "pending_amount_cents": {
+            "type": "integer",
+            "title": "Pending Amount Cents"
+          },
+          "over_threshold_pending": {
+            "type": "integer",
+            "title": "Over Threshold Pending"
+          }
+        },
+        "type": "object",
+        "required": [
+          "pending_count",
+          "pending_amount_cents",
+          "over_threshold_pending"
+        ],
+        "title": "RefundsDashboard"
       },
       "ToggleRequest": {
         "properties": {

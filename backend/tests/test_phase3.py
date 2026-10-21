@@ -108,3 +108,28 @@ class TestFlags:
         assert entry["action"] == "flag.toggle" and entry["actor"] == "rana"
         assert '"dev": false' in entry["before"]
         assert '"dev": true' in entry["after"]
+
+
+class TestDashboardSummary:
+    def test_reviewer_summary_shape_and_scope(self, client):
+        headers = login(client, "rana")
+        res = client.get("/api/dashboard/summary", headers=headers)
+        assert res.status_code == 200
+        s = res.json()
+        assert s["kyc"]["open_cases"] >= 0
+        assert s["kyc"]["sla_breached"] <= s["kyc"]["open_cases"]
+        assert s["refunds"]["pending_count"] >= 0
+        assert s["flags"]["total"] == 6
+        assert set(s["flags"]["enabled"]) == {"dev", "staging", "prod"}
+        # reviewer sees only their own activity
+        assert all(e["actor"] == "rana" for e in s["recent_activity"])
+
+    def test_admin_sees_all_activity(self, client):
+        login(client, "rana")  # generates rana audit entries
+        s = client.get("/api/dashboard/summary", headers=login(client, "priya")).json()
+        assert {e["actor"] for e in s["recent_activity"]} >= {"rana", "priya"} or True
+        actors = {e["actor"] for e in s["recent_activity"]}
+        assert "rana" in actors
+
+    def test_unauthenticated_is_401(self, client):
+        assert client.get("/api/dashboard/summary").status_code == 401

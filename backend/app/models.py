@@ -38,3 +38,28 @@ class AuditEntryOut(BaseModel):
     before: str | None
     after: str | None
     created_at: str
+
+
+class KycDashboard(BaseModel):
+    open_cases: int
+    sla_breached: int
+    high_risk_open: int
+    assigned_to_me: int
+
+
+class RefundsDashboard(BaseModel):
+    pending_count: int
+    pending_amount_cents: int
+    over_threshold_pending: int
+
+
+class FlagsDashboard(BaseModel):
+    total: int
+    enabled: dict[str, int]
+
+
+class DashboardSummary(BaseModel):
+    kyc: KycDashboard | None = None
+    refunds: RefundsDashboard | None = None
+    flags: FlagsDashboard | None = None
+    recent_activity: list[AuditEntryOut]
