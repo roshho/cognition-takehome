@@ -4,11 +4,13 @@ import AppShell from "./components/AppShell";
 import { RequireAuth, RequireRole } from "./components/RequireAuth";
 import AuditPage from "./pages/AuditPage";
 import DirectoryPage from "./pages/DirectoryPage";
+import FlagsPage from "./pages/FlagsPage";
 import HomePage from "./pages/HomePage";
 import KycCasePage from "./pages/KycCasePage";
 import KycQueuePage from "./pages/KycQueuePage";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
+import RefundsPage from "./pages/RefundsPage";
 
 export default function App() {
   return (
@@ -39,6 +41,22 @@ export default function App() {
               element={
                 <RequireRole roles={["reviewer", "admin"]}>
                   <KycCasePage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/refunds"
+              element={
+                <RequireRole roles={["reviewer", "admin"]}>
+                  <RefundsPage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/flags"
+              element={
+                <RequireRole roles={["reviewer", "admin"]}>
+                  <FlagsPage />
                 </RequireRole>
               }
             />

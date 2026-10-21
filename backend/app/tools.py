@@ -13,6 +13,20 @@ TOOLS = [
         "roles": ["reviewer", "admin"],
     },
     {
+        "id": "refunds",
+        "name": "Refunds",
+        "description": "Approve or deny refund requests. Large refunds need an admin.",
+        "path": "/refunds",
+        "roles": ["reviewer", "admin"],
+    },
+    {
+        "id": "feature-flags",
+        "name": "Feature flags",
+        "description": "Toggle flags per environment; every change lands in the audit log.",
+        "path": "/flags",
+        "roles": ["reviewer", "admin"],
+    },
+    {
         "id": "directory",
         "name": "User directory",
         "description": "Browse portal users and their roles.",

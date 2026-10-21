@@ -31,6 +31,15 @@ no password:
 | `kwon`    | reviewer |
 | `priya`   | admin    |
 
+## What is NOT built / mocked (out of scope)
+
+- Real SSO — login is pick-a-user, no password
+- Hosting/deploy — only local `npm start` or `docker compose`
+- Document storage — KYC documents are filename placeholders
+- Real screening vendors — sanctions/PEP hits are seeded rows
+- Compliance certifications
+- Any app-building UI for non-engineers — the whole point is code-first tools
+
 ## What's built
 
 **Phase 1 — foundation (current state)**
@@ -60,7 +69,19 @@ no password:
   four-eyes rule; the same user approving twice gets a 409.
 - Only `open` cases can be actioned (409 otherwise).
 
-**Phase 3 — refunds dashboard + feature-flag panel** — not built yet.
+**Phase 3 — refunds dashboard + feature-flag panel (current state)**
+
+- Refunds at `/refunds`: 16 seeded refunds, summary stat cards, filters by
+  status and amount range, approve/deny — all audited. Refunds ≥ $10,000
+  (`ADMIN_THRESHOLD_CENTS`) can only be decided by an admin; reviewers get 403
+  and the buttons are disabled.
+- Flags at `/flags`: 6 seeded flags with per-environment toggles
+  (dev/staging/prod). Prod toggles are admin-only (403 for reviewers);
+  dev/staging are open to both roles. Clicking a flag shows its change
+  history, read straight from `audit_log` (`entity = 'feature_flag'`).
+- Both tools reuse the Phase 1 `DataTable`, role guards, and `write_audit`
+  helper — no shared-code changes were needed beyond Phase 2's
+  `rowClassName` prop.
 
 ## Mocked vs. production
 

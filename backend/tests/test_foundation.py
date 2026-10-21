@@ -52,8 +52,10 @@ class TestRoleEnforcement:
     def test_tools_are_filtered_by_role(self, client):
         reviewer_tools = client.get("/api/tools", headers=login(client, "rana")).json()
         admin_tools = client.get("/api/tools", headers=login(client, "priya")).json()
-        assert {t["id"] for t in reviewer_tools} == {"audit-trail", "kyc-queue"}
-        assert {t["id"] for t in admin_tools} == {"directory", "audit-trail", "kyc-queue"}
+        assert {t["id"] for t in reviewer_tools} == {
+            "audit-trail", "kyc-queue", "refunds", "feature-flags"}
+        assert {t["id"] for t in admin_tools} == {
+            "directory", "audit-trail", "kyc-queue", "refunds", "feature-flags"}
 
     def test_bad_token_is_401(self, client):
         assert client.get("/api/me", headers={"Authorization": "Bearer nope"}).status_code == 401

@@ -184,3 +184,26 @@ h3 { margin: 0 0 8px; }
 .note-add { display: flex; gap: 10px; margin-top: 12px; }
 .note-add .input { flex: 1; }
 section.card { margin-bottom: 16px; }
+
+/* Refunds + flags */
+.stats-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 12px 0 16px; }
+.stat { display: flex; flex-direction: column; gap: 4px; }
+.stat-num { font-size: 24px; font-weight: 700; }
+.admin-flag { color: var(--accent-dark); font-size: 11px; font-weight: 600; margin-left: 4px; }
+.status-pending { background: #fff3d6; color: #8a6d00; }
+.status-denied { background: #fde8e4; color: var(--danger); }
+.btn.small { padding: 4px 10px; font-size: 13px; }
+.action-cell { display: inline-flex; gap: 6px; }
+.toggle {
+  padding: 3px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  min-width: 48px;
+}
+.toggle.on { background: #e3f5ec; color: var(--ok); border-color: #bfe6d2; }
+.toggle.off { background: #f0f2f5; color: var(--muted); }
+.toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+.flag-history { margin-top: 16px; }
