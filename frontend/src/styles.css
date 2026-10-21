@@ -139,4 +139,48 @@ h3 { margin: 0 0 8px; }
   letter-spacing: inherit;
   font-weight: inherit;
 }
-.diff { font-size: 12px; white-space: nowrap; }
+.diff {
+  font-size: 12px;
+  white-space: normal;
+  word-break: break-all;
+  display: block;
+  max-width: 520px;
+}
+.data-table { overflow-x: auto; }
+.data-table td { vertical-align: top; }
+
+/* KYC queue */
+.filters { display: flex; gap: 12px; margin: 12px 0 16px; }
+.filter { max-width: 220px; }
+.row-sla { background: #fdf0ee; }
+.sla-warn { color: var(--danger); font-weight: 600; }
+.risk-badge, .status-badge, .hit-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.risk-high { background: #fde8e4; color: var(--danger); }
+.risk-medium { background: #fff3d6; color: #8a6d00; }
+.risk-low { background: #e3f5ec; color: var(--ok); }
+.status-open { background: #e8ecff; color: var(--accent-dark); }
+.status-approved { background: #e3f5ec; color: var(--ok); }
+.status-rejected { background: #fde8e4; color: var(--danger); }
+.status-escalated { background: #fff3d6; color: #8a6d00; }
+.hit-sanctions { background: #fde8e4; color: var(--danger); }
+.hit-pep { background: #fff3d6; color: #8a6d00; }
+.case-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.case-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 16px 0; }
+@media (max-width: 800px) { .case-grid { grid-template-columns: 1fr; } }
+.kv { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+.kv td { padding: 6px 8px; border-bottom: 1px solid var(--border); font-size: 14px; }
+.kv td:first-child { color: var(--muted); width: 40%; }
+.hit { margin-bottom: 10px; }
+.doc-list { margin: 0 0 16px; padding-left: 18px; }
+.actions .action-row { display: flex; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.reason-box { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; max-width: 360px; }
+.note { margin: 8px 0; }
+.note-add { display: flex; gap: 10px; margin-top: 12px; }
+.note-add .input { flex: 1; }
+section.card { margin-bottom: 16px; }

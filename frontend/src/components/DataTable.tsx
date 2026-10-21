@@ -13,6 +13,7 @@ interface Props<T> {
   rows: T[];
   filterPlaceholder?: string;
   filterValue?: (row: T) => string;
+  rowClassName?: (row: T) => string;
   emptyMessage?: string;
 }
 
@@ -27,6 +28,7 @@ export default function DataTable<T extends object>({
   rows,
   filterPlaceholder = "Filter…",
   filterValue,
+  rowClassName,
   emptyMessage = "Nothing to show.",
 }: Props<T>) {
   const [query, setQuery] = useState("");
@@ -112,7 +114,7 @@ export default function DataTable<T extends object>({
             </tr>
           )}
           {sorted.map((row, i) => (
-            <tr key={i}>
+            <tr key={i} className={rowClassName ? rowClassName(row) : undefined}>
               {columns.map((c) => (
                 <td key={c.key}>{c.render ? c.render(row) : String(cellValue(c, row))}</td>
               ))}

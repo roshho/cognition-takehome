@@ -5,6 +5,8 @@ import { RequireAuth, RequireRole } from "./components/RequireAuth";
 import AuditPage from "./pages/AuditPage";
 import DirectoryPage from "./pages/DirectoryPage";
 import HomePage from "./pages/HomePage";
+import KycCasePage from "./pages/KycCasePage";
+import KycQueuePage from "./pages/KycQueuePage";
 import LoginPage from "./pages/LoginPage";
 import ProfilePage from "./pages/ProfilePage";
 
@@ -24,6 +26,22 @@ export default function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/audit" element={<AuditPage />} />
+            <Route
+              path="/kyc"
+              element={
+                <RequireRole roles={["reviewer", "admin"]}>
+                  <KycQueuePage />
+                </RequireRole>
+              }
+            />
+            <Route
+              path="/kyc/:id"
+              element={
+                <RequireRole roles={["reviewer", "admin"]}>
+                  <KycCasePage />
+                </RequireRole>
+              }
+            />
             <Route
               path="/directory"
               element={

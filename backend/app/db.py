@@ -3,6 +3,8 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
+from . import kyc
+
 DB_PATH = Path(os.environ.get("PORTAL_DB_PATH", Path(__file__).resolve().parent.parent / "portal.db"))
 
 SCHEMA = """
@@ -51,6 +53,7 @@ def init_db(path: Path | str = DB_PATH) -> None:
     conn = connect(path)
     try:
         conn.executescript(SCHEMA)
+        conn.executescript(kyc.SCHEMA)
         conn.commit()
     finally:
         conn.close()

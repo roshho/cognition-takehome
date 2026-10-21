@@ -41,7 +41,13 @@ def logout(
     token = authorization.removeprefix("Bearer ").strip() if authorization else ""
     with get_db() as conn:
         conn.execute("DELETE FROM sessions WHERE token = ?", (token,))
-        write_audit(conn, actor=user["username"], action="auth.logout", entity="session")
+        write_audit(
+            conn,
+            actor=user["username"],
+            action="auth.logout",
+            entity="session",
+            after={"username": user["username"]},
+        )
     return {"ok": True}
 
 

@@ -4,7 +4,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .db import init_db, get_db
-from .routers import auth, core, me
+from .kyc import seed_kyc
+from .routers import auth, core, kyc as kyc_router, me
 from .seed import seed
 
 
@@ -13,6 +14,7 @@ async def lifespan(app: FastAPI):
     init_db()
     with get_db() as conn:
         seed(conn)
+        seed_kyc(conn)
     yield
 
 
@@ -34,6 +36,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(me.router)
 app.include_router(core.router)
+app.include_router(kyc_router.router)
 
 
 @app.get("/api/health")

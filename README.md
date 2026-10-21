@@ -47,7 +47,18 @@ no password:
 - `PATCH /api/me` (rename yourself) exists as a minimal mutating endpoint so
   the audit path is exercised end-to-end.
 
-**Phase 2 — KYC review queue** — not built yet.
+**Phase 2 — KYC review queue (current state)**
+
+- Queue at `/kyc`: 25 seeded cases, filterable by status and risk band,
+  SLA-breach highlighting (open > 48h), sorted breach-first then by risk.
+- Case detail at `/kyc/:id`: applicant info with PII masked by default
+  (`POST .../unmask` reveals it and is written to the audit log), placeholder
+  documents, risk score, mock sanctions/PEP hits, notes.
+- Actions: assign to me, approve, reject, escalate — all audited. Reject and
+  escalate require a reason code (validated against a fixed list, 422
+  otherwise). High-risk cases (score ≥ 70) need two distinct approvers — the
+  four-eyes rule; the same user approving twice gets a 409.
+- Only `open` cases can be actioned (409 otherwise).
 
 **Phase 3 — refunds dashboard + feature-flag panel** — not built yet.
 
@@ -60,6 +71,9 @@ no password:
 | Role list hardcoded on `users.role`  | RBAC from an identity provider / directory   |
 | Audit log in app DB                  | Tamper-evident store (WORM / immutable logs) |
 | `docker compose` for local dev       | Hosting, deploys, secrets management         |
+| PII "masking" string surgery         | Field-level encryption + access policies     |
+| Placeholder documents                | Real document storage + viewers              |
+| Seeded sanctions/PEP hits            | Real screening vendor integration            |
 
 ## Known limitations
 

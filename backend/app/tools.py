@@ -6,6 +6,13 @@ tool's own endpoints still enforce the same roles server-side.
 
 TOOLS = [
     {
+        "id": "kyc-queue",
+        "name": "KYC review queue",
+        "description": "Work the onboarding review queue: verify documents, screening hits, approve or reject.",
+        "path": "/kyc",
+        "roles": ["reviewer", "admin"],
+    },
+    {
         "id": "directory",
         "name": "User directory",
         "description": "Browse portal users and their roles.",
