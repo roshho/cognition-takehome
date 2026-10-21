@@ -1,0 +1,17 @@
+{
+  "name": "meridian-internal-tools-portal",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Proof of concept: internal tools as normal code (FastAPI + React/TS).",
+  "scripts": {
+    "setup": "cd backend && (test -d .venv || python3 -m venv .venv) && .venv/bin/pip install -r requirements.txt && cd ../frontend && npm install && npm run gen:api",
+    "gen:api": "cd backend && .venv/bin/python scripts/export_openapi.py && cd ../frontend && npm run gen:api",
+    "start": "concurrently -n api,web -c blue,green \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "cd backend && .venv/bin/uvicorn app.main:app --reload --port 8000",
+    "dev:web": "cd frontend && npm run dev",
+    "test": "cd backend && .venv/bin/python -m pytest tests -q"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.0"
+  }
+}

@@ -1,0 +1,19 @@
+services:
+  api:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - portal-data:/data
+    environment:
+      PORTAL_DB_PATH: /data/portal.db
+
+  web:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  portal-data:
