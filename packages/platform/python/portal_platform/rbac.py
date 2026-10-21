@@ -9,25 +9,17 @@ from .config import group_role_map
 # role -> permission set. "*" is wildcard (admin).
 ROLE_PERMISSIONS: dict[str, set[str]] = {
     "admin": {"*"},
-    "reviewer": {
-        "kyc.read", "kyc.decide", "kyc.unmask",
-        "refunds.read", "refunds.decide",
-        "flags.read", "flags.toggle",
-        "audit.read",
-    },
-    "read_only": {
-        "kyc.read", "refunds.read", "flags.read", "audit.read",
-    },
+    "reviewer": {"audit.read"},
+    "read_only": {"audit.read"},
 }
-
-# Admin-only extras checked on top of role:
-#   refunds.decide_large — refunds over the admin threshold
-#   flags.toggle_prod    — production flag toggles
-ROLE_PERMISSIONS["admin"].update({"directory.read"})
+# Each app grants its own permissions at import via register_permissions
+# (see apps/*/backend/router.py). Admin-only permissions are simply never
+# granted to other roles (e.g. refunds.decide_large, flags.toggle_prod,
+# directory.read).
 
 
 def register_permissions(grants: dict[str, set[str]]) -> None:
-    """Let a generated app grant its own permissions at import time.
+    """Let an app grant its own permissions at import time.
 
     Example: ``register_permissions({"reviewer": {"assets.read", "assets.write"},
     "read_only": {"assets.read"}})``. Admins already have "*" and need no grant.

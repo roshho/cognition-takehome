@@ -1,27 +1,22 @@
 import type { ComponentType } from "react";
 
 /**
- * Generated apps (apps/<name>/frontend/Page.tsx) are discovered at build
- * time. Each page exports `meta` describing where it mounts and which
- * roles may see it — the route guard mirrors the backend's enforcement.
+ * Apps (apps/<name>/frontend/Page.tsx) are discovered at build time. Each
+ * page exports `meta`: where it mounts (`path` and `path/*`) and which
+ * roles the route guard admits — mirroring the backend's enforcement.
+ * Home-page cards come from the backend tool registry (/api/tools).
  */
 export interface AppMeta {
-  title: string;
   path: string;
-  description: string;
   roles?: string[];
 }
 
-export interface GeneratedApp {
+export interface AppModule {
   default: ComponentType;
   meta?: AppMeta;
 }
 
-export const generatedApps = import.meta.glob<GeneratedApp>(
+export const apps = import.meta.glob<AppModule>(
   "../../apps/*/frontend/Page.tsx",
   { eager: true }
 );
-
-export const appMetas: AppMeta[] = Object.values(generatedApps)
-  .map((m) => m.meta)
-  .filter((m): m is AppMeta => !!m);

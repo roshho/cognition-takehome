@@ -1,42 +1,30 @@
-"""Case repository interface — the KYC app talks to this, never to the DB.
+"""Repository interface + per-app adapter registry.
 
-Core trio is ``list_cases`` / ``get_case`` / ``update_case``; the rest are
-the case aggregate's sub-resources (documents, hits, notes, approvals,
-escalations) plus ``write_audit`` so each adapter controls where the audit
-row lands. ``transaction()`` scopes mutations: the SQL adapter returns a
-live sqlite connection (so change + audit commit together); the Dataverse
-adapter returns a shim — Dataverse has no ambient transaction (see README
-known gaps).
+Apps never touch storage directly: each app registers one or more adapter
+factories (``register_adapter(app, "sql", Factory)``) at import time and
+its routers call ``get_repository(app)``. The adapter kind is chosen by
+config (see ``config.data_adapter_for``).
+
+``Repository`` is the minimum contract every adapter satisfies (list /
+get / update, plus a transaction scope and an audit write so each adapter
+controls where the audit row lands). Apps may extend it with domain
+methods — e.g. the KYC app's case aggregate in apps/kyc/backend.
 """
-from contextlib import contextmanager
-from typing import Any, Protocol
+from __future__ import annotations
+
+from typing import Any, Callable, Protocol
+
+from . import config
 
 
-class KycRepository(Protocol):
-    @contextmanager
+class Repository(Protocol):
     def transaction(self):
-        """Yield a tx handle for one atomic unit of work."""
-        yield None
+        """Context manager yielding a tx handle for one atomic unit of work."""
+        ...
 
-    def list_cases(
-        self,
-        tx=None,
-        *,
-        status: str | None = None,
-        min_risk: int | None = None,
-        max_risk: int | None = None,
-    ) -> list[dict]: ...
-
-    def get_case(self, case_id: int, tx=None) -> dict | None: ...
-    def get_documents(self, case_id: int, tx=None) -> list[dict]: ...
-    def get_hits(self, case_id: int, tx=None) -> list[dict]: ...
-    def get_notes(self, case_id: int, tx=None) -> list[dict]: ...
-
-    def update_case(self, tx, case_id: int, fields: dict) -> None: ...
-    def add_approval(self, tx, case_id: int, actor: str) -> None: ...
-    def add_escalation(self, tx, case_id: int, actor: str, reason_code: str) -> None: ...
-    def has_escalated(self, tx, case_id: int, actor: str) -> bool: ...
-    def add_note(self, tx, case_id: int, author: str, body: str) -> dict: ...
+    def list(self, tx=None, **filters) -> list[dict]: ...
+    def get(self, key: Any, tx=None) -> dict | None: ...
+    def update(self, tx, key: Any, fields: dict) -> None: ...
 
     def write_audit(
         self,
@@ -49,3 +37,37 @@ class KycRepository(Protocol):
         before: Any = None,
         after: Any = None,
     ) -> None: ...
+
+
+_FACTORIES: dict[str, dict[str, Callable[[], Any]]] = {}
+_INSTANCES: dict[str, Any] = {}
+
+
+def register_adapter(app: str, kind: str, factory: Callable[[], Any]) -> None:
+    """Register an adapter factory for ``app`` (e.g. kind "sql" or "dataverse")."""
+    _FACTORIES.setdefault(app, {})[kind] = factory
+    _INSTANCES.pop(app, None)
+
+
+def available_adapters(app: str) -> list[str]:
+    return sorted(_FACTORIES.get(app, {}))
+
+
+def get_repository(app: str):
+    """The configured adapter instance for ``app`` (cached per process)."""
+    if app in _INSTANCES:
+        return _INSTANCES[app]
+    factories = _FACTORIES.get(app)
+    if not factories:
+        raise LookupError(f"no data adapters registered for app {app!r}")
+    kind = config.data_adapter_for(app, available=set(factories))
+    if kind not in factories:
+        raise RuntimeError(
+            f"app {app!r} has no {kind!r} adapter (available: {', '.join(sorted(factories))})"
+        )
+    _INSTANCES[app] = factories[kind]()
+    return _INSTANCES[app]
+
+
+def _reset_for_tests() -> None:
+    _INSTANCES.clear()

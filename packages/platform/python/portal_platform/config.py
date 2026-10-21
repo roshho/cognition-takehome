@@ -47,6 +47,20 @@ def group_role_map() -> dict[str, str]:
 # "sql" (local sqlite, real) or "dataverse" (OData Web API, env-authed).
 DATA_ADAPTER = os.environ.get("DATA_ADAPTER", "sql").lower()
 
+
+def data_adapter_for(app: str, available: set[str] | None = None) -> str:
+    """Adapter kind for one app. ``DATA_ADAPTER_<APP>`` (e.g.
+    DATA_ADAPTER_KYC=dataverse) is explicit and must exist for that app.
+    The global ``DATA_ADAPTER`` applies only to apps that ship that kind;
+    others stay on "sql"."""
+    per_app = os.environ.get("DATA_ADAPTER_" + app.upper().replace("-", "_"))
+    if per_app:
+        return per_app.lower()
+    kind = os.environ.get("DATA_ADAPTER", "sql").lower()
+    if available is not None and kind not in available:
+        return "sql"
+    return kind
+
 DATAVERSE_BASE_URL = os.environ.get("DATAVERSE_BASE_URL", "").rstrip("/")
 DATAVERSE_ENTITY = os.environ.get("DATAVERSE_ENTITY", "mer_kyccases")
 DATAVERSE_API = os.environ.get("DATAVERSE_API", "api/data/v9.2")

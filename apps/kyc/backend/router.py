@@ -3,14 +3,56 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from portal_platform.adapters import get_repository
+from app.auth import require_permission
+from portal_platform.db import register_schema, register_seed
+from portal_platform.rbac import register_permissions
+from portal_platform.repository import get_repository, register_adapter
+from portal_platform.tools import register_tool
 
-from ..auth import require_permission
-from ..kyc import (
+from .dataverse_repo import DataverseKycRepository
+from .domain import (
     ESCALATE_REASON_CODES,
+    HIGH_RISK_THRESHOLD,
     REJECT_REASON_CODES,
+    SCHEMA,
     mask_pii,
     required_approvals,
+    seed_kyc,
+)
+from .repository import SqlKycRepository
+
+APP = "kyc"
+
+register_schema(APP, SCHEMA)
+register_seed(APP, seed_kyc)
+register_permissions({
+    "reviewer": {"kyc.read", "kyc.decide", "kyc.unmask"},
+    "read_only": {"kyc.read"},
+})
+# DATA_ADAPTER_KYC (or DATA_ADAPTER) = "sql" | "dataverse"
+register_adapter(APP, "sql", SqlKycRepository)
+register_adapter(APP, "dataverse", DataverseKycRepository)
+
+
+def _summary(user: dict) -> list[dict]:
+    open_cases = get_repository(APP).list_cases(status="open")
+    breached = sum(c["sla_breached"] for c in open_cases)
+    return [
+        {"label": "Open cases", "value": len(open_cases)},
+        {"label": "Past 48h SLA", "value": breached, "tone": "danger" if breached else None},
+        {"label": "High-risk", "value": sum(c["risk_score"] >= HIGH_RISK_THRESHOLD for c in open_cases)},
+        {"label": "Mine", "value": sum(c["assignee"] == user["username"] for c in open_cases)},
+    ]
+
+
+register_tool(
+    "kyc-queue",
+    name="KYC review queue",
+    description="Work the onboarding review queue: verify documents, screening hits, approve or reject.",
+    path="/kyc",
+    roles=["reviewer", "admin", "read_only"],
+    order=10,
+    summary=_summary,
 )
 
 router = APIRouter(prefix="/api/kyc", tags=["kyc"])
@@ -124,7 +166,7 @@ def list_cases(
     max_risk: int | None = None,
     user: dict = Depends(kyc_read),
 ):
-    repo = get_repository()
+    repo = get_repository(APP)
     cases = repo.list_cases(status=status, min_risk=min_risk, max_risk=max_risk)
     # SLA breaches first, then highest risk
     cases.sort(key=lambda c: (not c["sla_breached"], -c["risk_score"]))
@@ -133,7 +175,7 @@ def list_cases(
 
 @router.get("/cases/{case_id}", response_model=KycCaseDetail)
 def get_case(case_id: int, user: dict = Depends(kyc_read)):
-    repo = get_repository()
+    repo = get_repository(APP)
     case = repo.get_case(case_id)
     if case is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Case not found")
@@ -147,7 +189,7 @@ def get_case(case_id: int, user: dict = Depends(kyc_read)):
 @router.post("/cases/{case_id}/unmask", response_model=PiiOut)
 def unmask_pii(case_id: int, user: dict = Depends(kyc_unmask)):
     """Reveal applicant PII — audited, because reading PII is a decision too."""
-    repo = get_repository()
+    repo = get_repository(APP)
     with repo.transaction() as tx:
         case = repo.get_case(case_id, tx)
         if case is None:
@@ -171,7 +213,7 @@ def unmask_pii(case_id: int, user: dict = Depends(kyc_unmask)):
 
 @router.post("/cases/{case_id}/assign")
 def assign_to_me(case_id: int, user: dict = Depends(kyc_decide)):
-    repo = get_repository()
+    repo = get_repository(APP)
     with repo.transaction() as tx:
         case = repo.get_case(case_id, tx)
         if case is None:
@@ -195,7 +237,7 @@ def approve(case_id: int, user: dict = Depends(kyc_decide)):
     """Approve a case. High-risk cases (score >= 70) need two distinct
     approvers — the four-eyes rule. Nobody can be both pairs of eyes, and
     nobody may decide a case they escalated."""
-    repo = get_repository()
+    repo = get_repository(APP)
     with repo.transaction() as tx:
         case = repo.get_case(case_id, tx)
         if case is None:
@@ -248,7 +290,7 @@ def _decide(case_id: int, verb: str, new_status: str, body: ReasonRequest,
             status.HTTP_422_UNPROCESSABLE_ENTITY,
             f"reason_code must be one of: {', '.join(allowed)}",
         )
-    repo = get_repository()
+    repo = get_repository(APP)
     with repo.transaction() as tx:
         case = repo.get_case(case_id, tx)
         if case is None:
@@ -285,7 +327,7 @@ def add_note(case_id: int, body: NoteRequest, user: dict = Depends(kyc_decide)):
     text = body.body.strip()
     if not text:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Note body is empty")
-    repo = get_repository()
+    repo = get_repository(APP)
     with repo.transaction() as tx:
         if repo.get_case(case_id, tx) is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Case not found")

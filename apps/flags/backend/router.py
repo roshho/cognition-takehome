@@ -1,12 +1,45 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from ..audit import write_audit
-from portal_platform.rbac import has_permission
+from app.auth import require_permission
+from portal_platform.db import register_schema, register_seed
+from portal_platform.rbac import has_permission, register_permissions
+from portal_platform.repository import get_repository, register_adapter
+from portal_platform.tools import register_tool
 
-from ..auth import require_permission
-from ..db import get_db
-from ..flags import ENVIRONMENTS
+from .domain import ENVIRONMENTS, SCHEMA, seed_flags
+from .repository import SqlFlagsRepository
+
+APP = "flags"
+
+register_schema(APP, SCHEMA)
+register_seed(APP, seed_flags)
+# flags.toggle_prod is admin-only: never granted here.
+register_permissions({
+    "reviewer": {"flags.read", "flags.toggle"},
+    "read_only": {"flags.read"},
+})
+register_adapter(APP, "sql", SqlFlagsRepository)
+
+
+def _summary(user: dict) -> list[dict]:
+    flags = get_repository(APP).list()
+    return [
+        {"label": "Flags", "value": len(flags)},
+        {"label": "On in dev", "value": sum(f["enabled_dev"] for f in flags)},
+        {"label": "On in prod", "value": sum(f["enabled_prod"] for f in flags)},
+    ]
+
+
+register_tool(
+    "feature-flags",
+    name="Feature flags",
+    description="Toggle flags per environment; every change lands in the audit log.",
+    path="/flags",
+    roles=["reviewer", "admin", "read_only"],
+    order=30,
+    summary=_summary,
+)
 
 router = APIRouter(prefix="/api/flags", tags=["flags"])
 
@@ -37,18 +70,9 @@ class FlagHistoryEntry(BaseModel):
     created_at: str
 
 
-def flag_row(row) -> dict:
-    r = dict(row)
-    for env in ENVIRONMENTS:
-        r[f"enabled_{env}"] = bool(r[f"enabled_{env}"])
-    return r
-
-
 @router.get("", response_model=list[FlagOut])
 def list_flags(user: dict = Depends(flags_read)):
-    with get_db() as conn:
-        rows = conn.execute("SELECT * FROM feature_flags ORDER BY key").fetchall()
-    return [flag_row(r) for r in rows]
+    return get_repository(APP).list()
 
 
 @router.post("/{key}/toggle", response_model=FlagOut)
@@ -67,15 +91,15 @@ def toggle(key: str, body: ToggleRequest, user: dict = Depends(flags_toggle)):
             "Toggling production flags requires an admin",
         )
     col = f"enabled_{env}"
-    with get_db() as conn:
-        row = conn.execute("SELECT * FROM feature_flags WHERE key = ?", (key,)).fetchone()
-        if row is None:
+    repo = get_repository(APP)
+    with repo.transaction() as tx:
+        flag = repo.get(key, tx)
+        if flag is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Flag not found")
-        flag = dict(row)
-        new_val = 0 if flag[col] else 1
-        conn.execute(f"UPDATE feature_flags SET {col} = ? WHERE key = ?", (new_val, key))
-        write_audit(
-            conn,
+        new_val = not flag[col]
+        repo.update(tx, key, {col: int(new_val)})
+        repo.write_audit(
+            tx,
             actor=user["username"],
             action="flag.toggle",
             entity="feature_flag",
@@ -83,19 +107,12 @@ def toggle(key: str, body: ToggleRequest, user: dict = Depends(flags_toggle)):
             before={env: bool(flag[col])},
             after={env: bool(new_val)},
         )
-        updated = conn.execute(
-            "SELECT * FROM feature_flags WHERE key = ?", (key,)
-        ).fetchone()
-    return flag_row(updated)
+        updated = repo.get(key, tx)
+    return updated
 
 
 @router.get("/{key}/history", response_model=list[FlagHistoryEntry])
 def history(key: str, user: dict = Depends(flags_read)):
     """Change history for a flag — straight from the shared audit log."""
-    with get_db() as conn:
-        rows = conn.execute(
-            "SELECT id, actor, action, before, after, created_at FROM audit_log"
-            " WHERE entity = 'feature_flag' AND entity_id = ? ORDER BY id DESC",
-            (key,),
-        ).fetchall()
-    return [FlagHistoryEntry(**dict(r)) for r in rows]
+    rows = get_repository(APP).audit_history("feature_flag", key)
+    return [FlagHistoryEntry(**r) for r in rows]

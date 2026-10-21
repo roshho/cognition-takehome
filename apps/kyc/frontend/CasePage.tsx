@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { api } from "../api/client";
+import { api } from "@portal/api";
 import { useAuth } from "@portal/platform";
 
 interface KycCaseDetail {

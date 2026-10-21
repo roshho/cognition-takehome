@@ -12,7 +12,7 @@
     "gen:api": "cd backend && .venv/bin/python scripts/export_openapi.py && cd .. && npm run gen:api --workspace frontend",
     "new-app": "python3 scripts/new_app.py",
     "start": "concurrently -n api,web -c blue,green \"npm run dev:api\" \"npm run dev:web\"",
-    "dev:api": "cd backend && .venv/bin/uvicorn app.main:app --reload --port 8000",
+    "dev:api": "cd backend && .venv/bin/uvicorn app.main:app --reload --reload-dir . --reload-dir ../apps --reload-dir ../packages/platform/python --port 8000",
     "dev:web": "npm run dev --workspace frontend",
     "test": "cd backend && .venv/bin/python -m pytest tests ../apps -q"
   },

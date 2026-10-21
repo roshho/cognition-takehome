@@ -497,7 +497,7 @@
           "core"
         ],
         "summary": "Dashboard Summary",
-        "description": "Role-aware per-tool stats for the home dashboard.",
+        "description": "Role-aware per-tool stats for the home dashboard. Each tool's stats\ncome from the summary() it registered (apps read via their adapter).",
         "operationId": "dashboard_summary_api_dashboard_summary_get",
         "parameters": [
           {
@@ -524,6 +524,358 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/DashboardSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/flags": {
+      "get": {
+        "tags": [
+          "flags"
+        ],
+        "summary": "List Flags",
+        "operationId": "list_flags_api_flags_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FlagOut"
+                  },
+                  "title": "Response List Flags Api Flags Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/flags/{key}/toggle": {
+      "post": {
+        "tags": [
+          "flags"
+        ],
+        "summary": "Toggle",
+        "operationId": "toggle_api_flags__key__toggle_post",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ToggleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FlagOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/flags/{key}/history": {
+      "get": {
+        "tags": [
+          "flags"
+        ],
+        "summary": "History",
+        "description": "Change history for a flag \u2014 straight from the shared audit log.",
+        "operationId": "history_api_flags__key__history_get",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Key"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FlagHistoryEntry"
+                  },
+                  "title": "Response History Api Flags  Key  History Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/it-assets/items": {
+      "get": {
+        "tags": [
+          "it-assets"
+        ],
+        "summary": "List Items",
+        "operationId": "list_items_api_it_assets_items_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ItemOut"
+                  },
+                  "title": "Response List Items Api It Assets Items Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "it-assets"
+        ],
+        "summary": "Create Item",
+        "operationId": "create_item_api_it_assets_items_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ItemIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/it-assets/items/{item_id}/close": {
+      "post": {
+        "tags": [
+          "it-assets"
+        ],
+        "summary": "Close Item",
+        "operationId": "close_item_api_it_assets_items__item_id__close_post",
+        "parameters": [
+          {
+            "name": "item_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Item Id"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ItemOut"
                 }
               }
             }
@@ -1415,358 +1767,6 @@
         }
       }
     },
-    "/api/flags": {
-      "get": {
-        "tags": [
-          "flags"
-        ],
-        "summary": "List Flags",
-        "operationId": "list_flags_api_flags_get",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/FlagOut"
-                  },
-                  "title": "Response List Flags Api Flags Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/flags/{key}/toggle": {
-      "post": {
-        "tags": [
-          "flags"
-        ],
-        "summary": "Toggle",
-        "operationId": "toggle_api_flags__key__toggle_post",
-        "parameters": [
-          {
-            "name": "key",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Key"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ToggleRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/FlagOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/flags/{key}/history": {
-      "get": {
-        "tags": [
-          "flags"
-        ],
-        "summary": "History",
-        "description": "Change history for a flag \u2014 straight from the shared audit log.",
-        "operationId": "history_api_flags__key__history_get",
-        "parameters": [
-          {
-            "name": "key",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "title": "Key"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/FlagHistoryEntry"
-                  },
-                  "title": "Response History Api Flags  Key  History Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/it-assets/items": {
-      "get": {
-        "tags": [
-          "it-assets"
-        ],
-        "summary": "List Items",
-        "operationId": "list_items_api_it_assets_items_get",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/ItemOut"
-                  },
-                  "title": "Response List Items Api It Assets Items Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "it-assets"
-        ],
-        "summary": "Create Item",
-        "operationId": "create_item_api_it_assets_items_post",
-        "parameters": [
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ItemIn"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ItemOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/it-assets/items/{item_id}/close": {
-      "post": {
-        "tags": [
-          "it-assets"
-        ],
-        "summary": "Close Item",
-        "operationId": "close_item_api_it_assets_items__item_id__close_post",
-        "parameters": [
-          {
-            "name": "item_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Item Id"
-            }
-          },
-          {
-            "name": "authorization",
-            "in": "header",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ItemOut"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/health": {
       "get": {
         "summary": "Health",
@@ -1868,35 +1868,15 @@
       },
       "DashboardSummary": {
         "properties": {
-          "kyc": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/KycDashboard"
+          "stats": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/StatOut"
               },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "refunds": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/RefundsDashboard"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "flags": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/FlagsDashboard"
-              },
-              {
-                "type": "null"
-              }
-            ]
+              "type": "array"
+            },
+            "type": "object",
+            "title": "Stats"
           },
           "recent_activity": {
             "items": {
@@ -1908,6 +1888,7 @@
         },
         "type": "object",
         "required": [
+          "stats",
           "recent_activity"
         ],
         "title": "DashboardSummary"
@@ -2041,27 +2022,6 @@
           "enabled_prod"
         ],
         "title": "FlagOut"
-      },
-      "FlagsDashboard": {
-        "properties": {
-          "total": {
-            "type": "integer",
-            "title": "Total"
-          },
-          "enabled": {
-            "additionalProperties": {
-              "type": "integer"
-            },
-            "type": "object",
-            "title": "Enabled"
-          }
-        },
-        "type": "object",
-        "required": [
-          "total",
-          "enabled"
-        ],
-        "title": "FlagsDashboard"
       },
       "HTTPValidationError": {
         "properties": {
@@ -2383,34 +2343,6 @@
         ],
         "title": "KycCaseListItem"
       },
-      "KycDashboard": {
-        "properties": {
-          "open_cases": {
-            "type": "integer",
-            "title": "Open Cases"
-          },
-          "sla_breached": {
-            "type": "integer",
-            "title": "Sla Breached"
-          },
-          "high_risk_open": {
-            "type": "integer",
-            "title": "High Risk Open"
-          },
-          "assigned_to_me": {
-            "type": "integer",
-            "title": "Assigned To Me"
-          }
-        },
-        "type": "object",
-        "required": [
-          "open_cases",
-          "sla_breached",
-          "high_risk_open",
-          "assigned_to_me"
-        ],
-        "title": "KycDashboard"
-      },
       "LoginRequest": {
         "properties": {
           "username": {
@@ -2653,28 +2585,45 @@
         ],
         "title": "RefundStats"
       },
-      "RefundsDashboard": {
+      "StatOut": {
         "properties": {
-          "pending_count": {
-            "type": "integer",
-            "title": "Pending Count"
+          "label": {
+            "type": "string",
+            "title": "Label"
           },
-          "pending_amount_cents": {
-            "type": "integer",
-            "title": "Pending Amount Cents"
+          "value": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Value"
           },
-          "over_threshold_pending": {
-            "type": "integer",
-            "title": "Over Threshold Pending"
+          "tone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "warn",
+                  "danger"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tone"
           }
         },
         "type": "object",
         "required": [
-          "pending_count",
-          "pending_amount_cents",
-          "over_threshold_pending"
+          "label",
+          "value"
         ],
-        "title": "RefundsDashboard"
+        "title": "StatOut"
       },
       "ToggleRequest": {
         "properties": {

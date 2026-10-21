@@ -1,30 +1,5 @@
 """Phase 1 tests: role enforcement and audit logging."""
-import importlib
-import os
-import sys
-from pathlib import Path
-
-import pytest
 from fastapi.testclient import TestClient
-
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
-
-@pytest.fixture()
-def client(tmp_path, monkeypatch):
-    monkeypatch.setenv("PORTAL_DB_PATH", str(tmp_path / "test.db"))
-    import app.db
-
-    importlib.reload(app.db)  # re-read PORTAL_DB_PATH
-    import app.auth, app.routers.auth, app.routers.me, app.routers.core, app.main
-
-    importlib.reload(app.auth)
-    importlib.reload(app.routers.auth)
-    importlib.reload(app.routers.me)
-    importlib.reload(app.routers.core)
-    importlib.reload(app.main)
-    with TestClient(app.main.app) as c:
-        yield c
 
 
 def login(client: TestClient, username: str) -> dict:
@@ -52,10 +27,12 @@ class TestRoleEnforcement:
     def test_tools_are_filtered_by_role(self, client):
         reviewer_tools = client.get("/api/tools", headers=login(client, "rana")).json()
         admin_tools = client.get("/api/tools", headers=login(client, "priya")).json()
-        assert {t["id"] for t in reviewer_tools} == {
-            "audit-trail", "kyc-queue", "refunds", "feature-flags"}
-        assert {t["id"] for t in admin_tools} == {
-            "directory", "audit-trail", "kyc-queue", "refunds", "feature-flags"}
+        reviewer_ids = {t["id"] for t in reviewer_tools}
+        admin_ids = {t["id"] for t in admin_tools}
+        # built-ins always present; generated apps under apps/ may add more
+        assert {"audit-trail", "kyc-queue", "refunds", "feature-flags"} <= reviewer_ids
+        assert "directory" not in reviewer_ids
+        assert admin_ids == reviewer_ids | {"directory"}
 
     def test_bad_token_is_401(self, client):
         assert client.get("/api/me", headers={"Authorization": "Bearer nope"}).status_code == 401

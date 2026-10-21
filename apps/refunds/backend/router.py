@@ -1,12 +1,52 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 
-from ..audit import write_audit
-from portal_platform.rbac import has_permission
+from app.auth import require_permission
+from portal_platform.db import register_schema, register_seed
+from portal_platform.rbac import has_permission, register_permissions
+from portal_platform.repository import get_repository, register_adapter
+from portal_platform.tools import register_tool
 
-from ..auth import require_permission
-from ..db import get_db
-from ..refunds import ADMIN_THRESHOLD_CENTS
+from .domain import ADMIN_THRESHOLD_CENTS, SCHEMA, seed_refunds
+from .repository import SqlRefundsRepository
+
+APP = "refunds"
+
+register_schema(APP, SCHEMA)
+register_seed(APP, seed_refunds)
+# refunds.decide_large (>= threshold) is admin-only: never granted here.
+register_permissions({
+    "reviewer": {"refunds.read", "refunds.decide"},
+    "read_only": {"refunds.read"},
+})
+register_adapter(APP, "sql", SqlRefundsRepository)
+
+
+def _money(cents: int) -> str:
+    return f"${cents / 100:,.0f}"
+
+
+def _summary(user: dict) -> list[dict]:
+    pending = get_repository(APP).list(status="pending")
+    over = sum(r["requires_admin"] for r in pending)
+    return [
+        {"label": "Pending", "value": len(pending)},
+        {"label": "Pending amount", "value": _money(sum(r["amount_cents"] for r in pending))},
+        {"label": "Needs admin", "value": over, "tone": "warn" if over else None},
+    ]
+
+
+register_tool(
+    "refunds",
+    name="Refunds",
+    description="Approve or deny refund requests. Large refunds need an admin.",
+    path="/refunds",
+    roles=["reviewer", "admin", "read_only"],
+    order=20,
+    summary=_summary,
+)
 
 router = APIRouter(prefix="/api/refunds", tags=["refunds"])
 
@@ -43,12 +83,6 @@ class DecideRequest(BaseModel):
     reason: str | None = None
 
 
-def refund_row(row) -> dict:
-    r = dict(row)
-    r["requires_admin"] = r["amount_cents"] >= ADMIN_THRESHOLD_CENTS
-    return r
-
-
 @router.get("", response_model=list[RefundOut])
 def list_refunds(
     status: str | None = None,
@@ -56,31 +90,17 @@ def list_refunds(
     max_amount: int | None = None,
     user: dict = Depends(refunds_read),
 ):
-    q = "SELECT * FROM refunds WHERE 1=1"
-    params: list = []
-    if status:
-        q += " AND status = ?"
-        params.append(status)
-    if min_amount is not None:
-        q += " AND amount_cents >= ?"
-        params.append(min_amount)
-    if max_amount is not None:
-        q += " AND amount_cents <= ?"
-        params.append(max_amount)
-    q += " ORDER BY created_at DESC"
-    with get_db() as conn:
-        rows = conn.execute(q, params).fetchall()
-    return [refund_row(r) for r in rows]
+    return get_repository(APP).list(
+        status=status, min_amount=min_amount, max_amount=max_amount
+    )
 
 
 @router.get("/stats", response_model=RefundStats)
 def stats(user: dict = Depends(refunds_read)):
-    with get_db() as conn:
-        rows = conn.execute(
-            "SELECT status, COUNT(*) c, COALESCE(SUM(amount_cents), 0) amt"
-            " FROM refunds GROUP BY status"
-        ).fetchall()
-    by = {r["status"]: (r["c"], r["amt"]) for r in rows}
+    by: dict[str, tuple[int, int]] = {}
+    for r in get_repository(APP).list():
+        c, amt = by.get(r["status"], (0, 0))
+        by[r["status"]] = (c + 1, amt + r["amount_cents"])
     total = sum(c for c, _ in by.values())
     return RefundStats(
         total=total,
@@ -94,12 +114,16 @@ def stats(user: dict = Depends(refunds_read)):
     )
 
 
+def _now() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+
+
 def _decide(refund_id: int, verb: str, new_status: str, body: DecideRequest, user: dict):
-    with get_db() as conn:
-        row = conn.execute("SELECT * FROM refunds WHERE id = ?", (refund_id,)).fetchone()
-        if row is None:
+    repo = get_repository(APP)
+    with repo.transaction() as tx:
+        refund = repo.get(refund_id, tx)
+        if refund is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Refund not found")
-        refund = dict(row)
         if refund["status"] != "pending":
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
@@ -110,13 +134,13 @@ def _decide(refund_id: int, verb: str, new_status: str, body: DecideRequest, use
                 status.HTTP_403_FORBIDDEN,
                 f"Refunds over ${ADMIN_THRESHOLD_CENTS / 100:,.0f} require an admin",
             )
-        conn.execute(
-            "UPDATE refunds SET status = ?, decided_by = ?, decided_at = datetime('now')"
-            " WHERE id = ?",
-            (new_status, user["username"], refund_id),
-        )
-        write_audit(
-            conn,
+        repo.update(tx, refund_id, {
+            "status": new_status,
+            "decided_by": user["username"],
+            "decided_at": _now(),
+        })
+        repo.write_audit(
+            tx,
             actor=user["username"],
             action=f"refund.{verb}",
             entity="refund",

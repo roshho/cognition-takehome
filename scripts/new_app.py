@@ -3,8 +3,8 @@
 
 Usage: npm run new-app -- <app-name>   (lowercase letters, digits, hyphens)
 
-Creates apps/<name>/{backend/router.py, backend/test_<name>.py,
-frontend/Page.tsx}, mounted automatically on the next api/web restart —
+Creates apps/<name>/{backend/router.py, backend/repository.py,
+backend/test_<name>.py, frontend/Page.tsx}, mounted automatically on the next api/web restart —
 no wiring edits needed.
 """
 import re

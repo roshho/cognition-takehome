@@ -1,112 +1,22 @@
-"""Dataverse adapter — KYC case store over the OData Web API.
-
-Auth is OAuth2 client-credentials via env vars (DATAVERSE_TENANT_ID /
-CLIENT_ID / CLIENT_SECRET, token URL overridable for non-Microsoft IdPs).
-There is no ambient transaction in OData: ``transaction()`` returns a shim
-and audit rows go to the local append-only audit table *after* the remote
-call commits — in production this needs an outbox (see README known gaps).
-
-Only reachable in tests via an injected httpx.Client/transport; nothing
-here has been run against a real Dataverse environment.
+"""Dataverse adapter for KYC cases — OData Web API, via the platform's
+DataverseClient (auth, OData plumbing, transaction shim). Field names
+(mer_*) are educated guesses; never run against a real Dataverse.
 """
-import time
-from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
-import httpx
+from portal_platform.adapters.dataverse import DataverseClient
 
-from .. import config
-from ..audit import write_audit as _write_audit
-
-_STATUS = ("open", "approved", "rejected", "escalated")
+from .domain import SLA_HOURS, required_approvals, risk_level
 
 
 def _parse_dt(value: str) -> datetime:
     return datetime.strptime(value, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
 
 
-class _DvTx:
-    """No ambient transaction — carries the local audit connection."""
-
-    def __init__(self):
-        self._audit_conn = None
-
-    def audit_conn(self):
-        if self._audit_conn is None:
-            from app.db import connect, DB_PATH
-
-            self._audit_conn = connect(DB_PATH)
-        return self._audit_conn
-
-    def close(self):
-        if self._audit_conn is not None:
-            self._audit_conn.commit()
-            self._audit_conn.close()
-            self._audit_conn = None
-
-
-class DataverseKycRepository:
-    def __init__(self, client: httpx.Client | None = None):
-        self._http = client or httpx.Client(timeout=15.0)
-        self._base = config.DATAVERSE_BASE_URL
-        self._entity = config.DATAVERSE_ENTITY
-        self._token: str | None = None
-        self._token_exp = 0.0
-
-    # --- auth ---
-    def _access_token(self) -> str:
-        if self._token and time.time() < self._token_exp - 30:
-            return self._token
-        res = self._http.post(
-            config.DATAVERSE_TOKEN_URL,
-            data={
-                "grant_type": "client_credentials",
-                "client_id": config.DATAVERSE_CLIENT_ID,
-                "client_secret": config.DATAVERSE_CLIENT_SECRET,
-                "scope": f"{self._base}/.default",
-            },
-        )
-        res.raise_for_status()
-        body = res.json()
-        self._token = body["access_token"]
-        self._token_exp = time.time() + float(body.get("expires_in", 3600))
-        return self._token
-
-    # --- OData plumbing ---
-    def _url(self, collection: str, extra: str = "") -> str:
-        return f"{self._base}/{config.DATAVERSE_API}/{collection}{extra}"
-
-    def _req(self, method: str, url: str, **kw) -> httpx.Response:
-        res = self._http.request(
-            method,
-            url,
-            headers={
-                "Authorization": f"Bearer {self._access_token()}",
-                "OData-MaxVersion": "4.0",
-                "OData-Version": "4.0",
-                "Accept": "application/json",
-                "Content-Type": "application/json; charset=utf-8",
-                "Prefer": "return=representation",
-            },
-            **kw,
-        )
-        res.raise_for_status()
-        return res
-
-    def _query(self, collection: str, filt: str = "", select: str = "") -> list[dict]:
-        params = {}
-        if filt:
-            params["$filter"] = filt
-        if select:
-            params["$select"] = select
-        res = self._req("GET", self._url(collection), params=params)
-        return res.json().get("value", [])
-
+class DataverseKycRepository(DataverseClient):
     # --- field mapping ---
     @staticmethod
     def _to_record(v: dict) -> dict:
-        from app.kyc import required_approvals, risk_level, SLA_HOURS
-
         created = v.get("mer_createdon") or ""
         created = created.replace("T", " ").split(".")[0].rstrip("Z")
         age = datetime.now(timezone.utc) - _parse_dt(created)
@@ -138,14 +48,6 @@ class DataverseKycRepository:
         return row.get("mer_kyccaseid") or row.get("id") if row else None
 
     # --- repository interface ---
-    @contextmanager
-    def transaction(self):
-        tx = _DvTx()
-        try:
-            yield tx
-        finally:
-            tx.close()
-
     def list_cases(self, tx=None, *, status=None, min_risk=None, max_risk=None):
         parts = []
         if status:
@@ -158,18 +60,16 @@ class DataverseKycRepository:
         cases = [self._to_record(r) for r in rows]
         for c in cases:
             c["approvals"] = self._approvals(c["id"])
-            c["approvals_required"] = 2 if c["risk_score"] >= 70 else 1
+            c["approvals_required"] = required_approvals(c["risk_score"])
         return cases
 
     def get_case(self, case_id: int, tx=None):
         row = self._case_by_id(case_id)
         if row is None:
             return None
-        from app.kyc import HIGH_RISK_THRESHOLD
-
         c = self._to_record(row)
         c["approvals"] = self._approvals(case_id)
-        c["approvals_required"] = 2 if c["risk_score"] >= HIGH_RISK_THRESHOLD else 1
+        c["approvals_required"] = required_approvals(c["risk_score"])
         return c
 
     def _approvals(self, case_id: int) -> list[str]:
@@ -258,6 +158,3 @@ class DataverseKycRepository:
             "body": body,
             "created_at": created.get("createdon", ""),
         }
-
-    def write_audit(self, tx, **kw):
-        _write_audit(tx.audit_conn(), **kw)

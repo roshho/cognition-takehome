@@ -5,8 +5,6 @@ from pathlib import Path
 
 from portal_platform.db import connect, init_db as _init_db, register_schema
 
-from . import flags, kyc, refunds
-
 DB_PATH = Path(os.environ.get("PORTAL_DB_PATH", Path(__file__).resolve().parent.parent / "portal.db"))
 
 SCHEMA = """
@@ -34,12 +32,9 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 """
 
-# Core schema first, then each built-in tool's. Generated apps register
-# their own when their router module is imported (portal_platform.db).
+# Core portal schema. Every app under apps/ registers its own tables when
+# its router module is imported (portal_platform.db.register_schema).
 register_schema("core", SCHEMA)
-register_schema("kyc", kyc.SCHEMA)
-register_schema("refunds", refunds.SCHEMA)
-register_schema("flags", flags.SCHEMA)
 
 
 @contextmanager

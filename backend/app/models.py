@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -41,26 +43,13 @@ class AuditEntryOut(BaseModel):
     request_id: str | None = None
 
 
-class KycDashboard(BaseModel):
-    open_cases: int
-    sla_breached: int
-    high_risk_open: int
-    assigned_to_me: int
-
-
-class RefundsDashboard(BaseModel):
-    pending_count: int
-    pending_amount_cents: int
-    over_threshold_pending: int
-
-
-class FlagsDashboard(BaseModel):
-    total: int
-    enabled: dict[str, int]
+class StatOut(BaseModel):
+    label: str
+    value: int | str
+    tone: Literal["warn", "danger"] | None = None
 
 
 class DashboardSummary(BaseModel):
-    kyc: KycDashboard | None = None
-    refunds: RefundsDashboard | None = None
-    flags: FlagsDashboard | None = None
+    # tool id -> stats from that tool's registered summary()
+    stats: dict[str, list[StatOut]]
     recent_activity: list[AuditEntryOut]

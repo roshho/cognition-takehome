@@ -20,12 +20,14 @@ production-style controls:
   `read_only` can view but not mutate
 - An append-only audit log written in the same transaction as each change,
   including PII reads
-- Swappable data sources: the KYC app goes through a `KycRepository`
-  interface (SQL adapter, plus a Dataverse adapter tested against mocked HTTP
-  only)
+- Swappable data sources: every app reads and writes through its own
+  repository, selected by config. All apps have a SQL adapter. KYC also has a
+  Dataverse adapter, tested against mocked HTTP only.
 
-The shared infrastructure is extracted into `packages/platform`, with a
-template and a one-command generator (`npm run new-app`) for new apps.
+The shared infrastructure is extracted into `packages/platform`. Each tool is a
+self-contained module under `apps/<name>/` (backend router, repository and
+tests, plus frontend page). The three built-in tools use the same format and
+auto-mounting as apps created by the one-command generator (`npm run new-app`).
 
 **What it does not show:**
 
@@ -33,11 +35,10 @@ template and a one-command generator (`npm run new-app`) for new apps.
   Savings are a hypothesis, not a result.
 - **Fidelity to real apps.** The tools are built to a spec. They are not
   replicas of existing Power Apps.
-- **Full extraction.** Only the shared layer was extracted. The three built-in
-  tools still live in `backend/app/` and `frontend/src/pages/`.
-  `apps/it-assets` is the only app in the generated self-contained format.
-- **Adapters everywhere.** Only KYC uses the repository adapter. Refunds and
-  flags still query SQLite directly.
+- **Dataverse beyond KYC.** Refunds, flags and generated apps have SQL
+  adapters only. The portal core in `backend/app/` (users, sessions, audit
+  trail, directory) queries SQLite directly. It is platform infrastructure, not
+  an app.
 - **Coexistence with Power Apps.** The Dataverse adapter is the intended hook
   for running alongside existing Dataverse-backed apps during a migration, but
   it has never run against a real Dataverse environment.
@@ -165,15 +166,24 @@ The shared package other apps would import; the app code consumes it:
   only guarantee lives in the DB layer, not convention. Mutations and their
   audit rows commit in one transaction. PII reads (`unmask`) are audited
   like writes.
-- **Repository interface** (`portal_platform/repository.py`) — the KYC
-  router only talks to a `KycRepository` protocol (`transaction`,
-  `list_cases`, `get_case`, `update_case`, `add_approval`, `add_escalation`,
-  `has_escalated`, `add_note`, `write_audit`). Two adapters behind
-  `DATA_ADAPTER`:
-  - `sql` — wraps the existing SQLite database (real).
-  - `dataverse` — OData Web API client (`/api/data/v9.2/<entity>`) with
-    client-credentials auth from env vars. Tested against `httpx`
-    `MockTransport` responses only — never against a real Dataverse.
+- **Repository interface** (`portal_platform/repository.py`). Every app
+  router talks only to its repository, obtained with `get_repository(app)`.
+  Each app registers its adapter factories with `register_adapter(app, kind,
+  factory)`. The platform defines:
+  - the base contract: `transaction`, `list`, `get`, `update`, `write_audit`;
+  - `adapters/sql.py::SqlRepository`, a table-backed base;
+  - `adapters/dataverse.py::DataverseClient`, with OAuth client-credentials
+    auth, OData plumbing and the transaction shim.
+
+  Per app:
+  - **KYC** (`apps/kyc/backend/repository.py`): `KycRepository` adds case
+    sub-resources. Its adapters are `sql`, which is real, and `dataverse`,
+    which calls the OData Web API at `/api/data/v9.2/<entity>`. The Dataverse
+    adapter is tested against `httpx` `MockTransport` responses only, never
+    against a real Dataverse.
+  - **Refunds, flags and generated apps:** SQL adapters only.
+
+  Each app's tests run the same contract assertions against its adapters.
 
 | Env var                    | Meaning                                              |
 | -------------------------- | ---------------------------------------------------- |
@@ -185,7 +195,8 @@ The shared package other apps would import; the app code consumes it:
 | `OIDC_SCOPE`               | Default `openid profile groups`                      |
 | `OIDC_GROUP_MAP_JSON`      | Optional `{"idp_group": "role"}` override            |
 | `FRONTEND_ORIGIN`          | Where the callback redirects with `?sso_token=`      |
-| `DATA_ADAPTER`             | `sql` (default) or `dataverse`                       |
+| `DATA_ADAPTER`             | `sql` (default) or `dataverse`. Applies to apps that ship that adapter; the rest stay on `sql` |
+| `DATA_ADAPTER_<APP>`       | Per-app override, e.g. `DATA_ADAPTER_KYC=dataverse`. Errors if the app lacks that adapter |
 | `DATAVERSE_BASE_URL`       | e.g. `https://org.crm.dynamics.com`                  |
 | `DATAVERSE_ENTITY`         | Table prefix/collection, default `mer_kyccases`      |
 | `DATAVERSE_TENANT_ID` / `CLIENT_ID` / `CLIENT_SECRET` / `TOKEN_URL` | Client-credentials for Dataverse |
@@ -249,17 +260,21 @@ Things that are approximated or stubbed, stated plainly:
 ## Layout
 
 ```
-backend/app/                  FastAPI app (auth, seed, routers for built-in tools)
+backend/app/                  portal core: auth/sessions, users, audit trail,
+                              dashboard, app auto-mount (main.py)
 backend/mockidp/              mock OIDC provider (discovery, JWKS, RS256 tokens)
-backend/tests/                pytest: role enforcement, audit, adapter contracts
+backend/tests/                pytest: core RBAC, audit, dashboard, OIDC, adapter
+                              registry; conftest.py has shared fixtures
 packages/platform/python/     portal_platform pip package: config, oidc, rbac,
                               audit, db registry, repository + sql/dataverse adapters
 packages/platform/web/        @portal/platform npm package: AppShell, DataTable,
                               Form, RequireAuth/RequireRole, AuthProvider, api client
-apps/                         generated apps (self-contained router+page+test);
-                              it-assets is the reference example
+apps/kyc, apps/refunds,       the three tools, each self-contained: backend/
+apps/flags                    (router, domain, repository, tests) + frontend/
+apps/it-assets                reference app generated from the template
 /templates/internal-app/      template copied by `npm run new-app`
-frontend/src/                 React app (generated client, pages, app discovery)
+frontend/src/                 React shell: typed OpenAPI client (@portal/api),
+                              home/login/audit/profile pages, app discovery
 ```
 
 AGENTS.md at the repo root documents the conventions generated apps must

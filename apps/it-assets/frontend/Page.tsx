@@ -2,11 +2,11 @@ import { useEffect, useState } from "react";
 import { DataTable, Form, FormField, untypedApi, useAuth } from "@portal/platform";
 
 /**
- * Mounted automatically at `path` — see AGENTS.md. `roles` mirrors the
- * backend grants in backend/router.py; the backend enforces regardless.
+ * Mounted automatically at `path` (and `path/*`) — see AGENTS.md. `roles`
+ * mirrors the backend grants in backend/router.py; the backend enforces
+ * regardless. The home-page card comes from register_tool() in router.py.
  */
 export const meta = {
-  title: "It Assets",
   path: "/apps/it-assets",
   description: "Generated internal app — edit me.",
   roles: ["reviewer", "admin", "read_only"],
@@ -28,7 +28,7 @@ export default function Page() {
   const [name, setName] = useState("");
 
   const load = async () => {
-    const { data } = await untypedApi.GET("/api/it-assets/items");
+    const { data } = await untypedApi.GET("/api/it-assets/items", {});
     setItems((data as Item[]) ?? []);
   };
 

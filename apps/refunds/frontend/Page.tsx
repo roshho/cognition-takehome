@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../api/client";
+import { api } from "@portal/api";
 import { useAuth } from "@portal/platform";
 import { DataTable } from "@portal/platform";
 
@@ -32,7 +32,13 @@ const STATUSES = ["", "pending", "approved", "denied"];
 const money = (cents: number, currency = "USD") =>
   `${(cents / 100).toLocaleString("en-US", { style: "currency", currency })}`;
 
-export default function RefundsPage() {
+/** Mounted at /refunds — roles mirror the backend grants in backend/router.py. */
+export const meta = {
+  path: "/refunds",
+  roles: ["reviewer", "admin", "read_only"],
+};
+
+export default function Page() {
   const { user } = useAuth();
   const [rows, setRows] = useState<Refund[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);

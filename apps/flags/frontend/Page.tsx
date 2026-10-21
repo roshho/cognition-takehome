@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { api } from "../api/client";
+import { api } from "@portal/api";
 import { useAuth } from "@portal/platform";
 import { DataTable } from "@portal/platform";
 
@@ -23,7 +23,13 @@ interface HistoryEntry {
 
 const ENVS = ["dev", "staging", "prod"] as const;
 
-export default function FlagsPage() {
+/** Mounted at /flags — roles mirror the backend grants in backend/router.py. */
+export const meta = {
+  path: "/flags",
+  roles: ["reviewer", "admin", "read_only"],
+};
+
+export default function Page() {
   const { user } = useAuth();
   const [rows, setRows] = useState<Flag[]>([]);
   const [history, setHistory] = useState<HistoryEntry[] | null>(null);

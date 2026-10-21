@@ -1,29 +1,69 @@
-"""SQL adapter — the real repository over the app's SQLite database.
+"""KYC case repository — the KYC router talks to this, never to the DB.
 
-``transaction()`` yields the sqlite connection itself, so the mutation and
-its audit row commit in the same transaction (get_db commits on exit).
+``KycRepository`` is the case aggregate's interface: the core trio
+``list_cases`` / ``get_case`` / ``update_case`` plus sub-resources
+(documents, hits, notes, approvals, escalations). Two adapters implement
+it: ``SqlKycRepository`` here (real) and ``DataverseKycRepository`` in
+dataverse_repo.py (OData, mocked-HTTP tests only). Both pass the same
+contract tests in test_kyc.py.
 """
-from ..audit import write_audit as _write_audit
+from __future__ import annotations
+
+from typing import Any, Protocol
+
+from portal_platform.adapters.sql import SqlRepository
+
+from .domain import case_row
 
 
-class SqlKycRepository:
-    def transaction(self):
-        # Imported lazily — portal_platform must not import `app` at module
-        # load time (the app imports portal_platform first).
-        from app.db import get_db
+class KycRepository(Protocol):
+    def transaction(self): ...
 
-        return get_db()
+    def list_cases(
+        self,
+        tx=None,
+        *,
+        status: str | None = None,
+        min_risk: int | None = None,
+        max_risk: int | None = None,
+    ) -> list[dict]: ...
 
-    def _conn(self, tx):
-        if tx is not None:
-            return _Ctx(tx)
-        from app.db import get_db
+    def get_case(self, case_id: int, tx=None) -> dict | None: ...
+    def get_documents(self, case_id: int, tx=None) -> list[dict]: ...
+    def get_hits(self, case_id: int, tx=None) -> list[dict]: ...
+    def get_notes(self, case_id: int, tx=None) -> list[dict]: ...
 
-        return get_db()
+    def update_case(self, tx, case_id: int, fields: dict) -> None: ...
+    def add_approval(self, tx, case_id: int, actor: str) -> None: ...
+    def add_escalation(self, tx, case_id: int, actor: str, reason_code: str) -> None: ...
+    def has_escalated(self, tx, case_id: int, actor: str) -> bool: ...
+    def add_note(self, tx, case_id: int, author: str, body: str) -> dict: ...
+
+    def write_audit(
+        self,
+        tx,
+        *,
+        actor: str,
+        action: str,
+        entity: str,
+        entity_id: Any = None,
+        before: Any = None,
+        after: Any = None,
+    ) -> None: ...
+
+
+class SqlKycRepository(SqlRepository):
+    """Real adapter over the portal SQLite DB. ``transaction()`` (inherited)
+    yields the connection, so change + audit commit together."""
+
+    table = "kyc_cases"
+    columns = frozenset({"status", "assignee", "decided_at", "risk_score"})
+    order_by = "created_at"
+
+    def _row(self, conn, row) -> dict:
+        return case_row(conn, row)
 
     def list_cases(self, tx=None, *, status=None, min_risk=None, max_risk=None):
-        from app.kyc import case_row
-
         q = "SELECT * FROM kyc_cases WHERE 1=1"
         params: list = []
         if status:
@@ -41,8 +81,6 @@ class SqlKycRepository:
             return [case_row(conn, r) for r in rows]
 
     def get_case(self, case_id: int, tx=None):
-        from app.kyc import case_row
-
         with self._conn(tx) as conn:
             row = conn.execute(
                 "SELECT * FROM kyc_cases WHERE id = ?", (case_id,)
@@ -82,11 +120,7 @@ class SqlKycRepository:
             ]
 
     def update_case(self, tx, case_id: int, fields: dict):
-        cols, params = [], []
-        for k, v in fields.items():
-            cols.append(f"{k} = ?")
-            params.append(v)
-        tx.execute(f"UPDATE kyc_cases SET {', '.join(cols)} WHERE id = ?", (*params, case_id))
+        self.update(tx, case_id, fields)
 
     def add_approval(self, tx, case_id: int, actor: str):
         tx.execute(
@@ -121,19 +155,3 @@ class SqlKycRepository:
             ).fetchone()
         )
 
-    def write_audit(self, tx, **kw):
-        _write_audit(tx, **kw)
-
-
-class _Ctx:
-    """Wrap an existing connection in the same context-manager shape as
-    get_db() but without committing or closing it — the caller owns it."""
-
-    def __init__(self, conn):
-        self.conn = conn
-
-    def __enter__(self):
-        return self.conn
-
-    def __exit__(self, *a):
-        return False
