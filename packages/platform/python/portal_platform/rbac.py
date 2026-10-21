@@ -26,6 +26,16 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
 ROLE_PERMISSIONS["admin"].update({"directory.read"})
 
 
+def register_permissions(grants: dict[str, set[str]]) -> None:
+    """Let a generated app grant its own permissions at import time.
+
+    Example: ``register_permissions({"reviewer": {"assets.read", "assets.write"},
+    "read_only": {"assets.read"}})``. Admins already have "*" and need no grant.
+    """
+    for role, perms in grants.items():
+        ROLE_PERMISSIONS.setdefault(role, set()).update(perms)
+
+
 def has_permission(role: str, permission: str) -> bool:
     perms = ROLE_PERMISSIONS.get(role, set())
     return "*" in perms or permission in perms

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../api/client";
-import { useAuth } from "../auth/AuthContext";
-import DataTable from "../components/DataTable";
+import { useAuth } from "@portal/platform";
+import { DataTable } from "@portal/platform";
 
 interface Refund {
   id: number;

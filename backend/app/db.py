@@ -3,7 +3,7 @@ import sqlite3
 from contextlib import contextmanager
 from pathlib import Path
 
-from portal_platform.audit import audit_append_only_guard
+from portal_platform.db import connect, init_db as _init_db, register_schema
 
 from . import flags, kyc, refunds
 
@@ -34,21 +34,17 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 """
 
-
-def connect(path: Path | str = DB_PATH) -> sqlite3.Connection:
-    conn = sqlite3.connect(path)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    # Append-only enforcement for the audit log: SQLite has no per-role
-    # GRANT, so the connection authorizer denies UPDATE/DELETE on the table.
-    # (Production Postgres equivalent: REVOKE UPDATE, DELETE.)
-    conn.set_authorizer(audit_append_only_guard)
-    return conn
+# Core schema first, then each built-in tool's. Generated apps register
+# their own when their router module is imported (portal_platform.db).
+register_schema("core", SCHEMA)
+register_schema("kyc", kyc.SCHEMA)
+register_schema("refunds", refunds.SCHEMA)
+register_schema("flags", flags.SCHEMA)
 
 
 @contextmanager
 def get_db():
-    conn = connect()
+    conn = connect(DB_PATH)
     try:
         yield conn
         conn.commit()
@@ -84,13 +80,4 @@ def _migrate(conn: sqlite3.Connection) -> None:
 
 
 def init_db(path: Path | str = DB_PATH) -> None:
-    conn = connect(path)
-    try:
-        conn.executescript(SCHEMA)
-        conn.executescript(kyc.SCHEMA)
-        conn.executescript(refunds.SCHEMA)
-        conn.executescript(flags.SCHEMA)
-        _migrate(conn)
-        conn.commit()
-    finally:
-        conn.close()
+    _init_db(path, migrate=_migrate)

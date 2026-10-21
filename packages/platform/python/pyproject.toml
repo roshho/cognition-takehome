@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "portal-platform"
+version = "0.1.0"
+description = "Shared platform package for Meridian internal tools: OIDC auth, RBAC, append-only audit, DB connect/schema registry, repository interface + SQL/Dataverse adapters."
+requires-python = ">=3.10"
+dependencies = [
+    "pyjwt[crypto]>=2",
+    "httpx>=0.27",
+]
+
+[tool.setuptools.packages.find]
+include = ["portal_platform*"]

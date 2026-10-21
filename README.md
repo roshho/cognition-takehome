@@ -11,9 +11,14 @@ internal tools as **normal code** instead of using a low-code platform.
 ## Run it
 
 ```bash
-npm install        # installs root tooling, backend deps, frontend deps
-npm run gen:api    # generate the typed client from the OpenAPI spec (once, or after API changes)
+npm run setup      # venv + platform editable install + npm install + gen:api
 npm start          # api on :8000, web on :5173
+```
+
+Create a new internal app in one command — see AGENTS.md:
+
+```bash
+npm run new-app -- <app-name>   # generates apps/<name>/, auto-mounted on restart
 ```
 
 or, with Docker:
@@ -89,7 +94,7 @@ Open http://localhost:5173 (or :3000 with docker). Two ways in:
   helper — no shared-code changes were needed beyond Phase 2's
   `rowClassName` prop.
 
-**Production-shaped layer (`backend/portal_platform/`)**
+**Production-shaped layer (`packages/platform/python/portal_platform/`)**
 
 The shared package other apps would import; the app code consumes it:
 
@@ -203,16 +208,24 @@ Things that are approximated or stubbed, stated plainly:
 ## Layout
 
 ```
-backend/app/              FastAPI app (auth, audit, tools, routers)
-backend/portal_platform/  shared package: config, oidc, rbac, audit,
-                          repository interface + sql/dataverse adapters
-backend/mockidp/          mock OIDC provider (discovery, JWKS, RS256 tokens)
-backend/tests/            pytest: role enforcement, audit, adapter contracts
-frontend/src/             React app (generated client, shared components, pages)
+backend/app/                  FastAPI app (auth, seed, routers for built-in tools)
+backend/mockidp/              mock OIDC provider (discovery, JWKS, RS256 tokens)
+backend/tests/                pytest: role enforcement, audit, adapter contracts
+packages/platform/python/     portal_platform pip package: config, oidc, rbac,
+                              audit, db registry, repository + sql/dataverse adapters
+packages/platform/web/        @portal/platform npm package: AppShell, DataTable,
+                              Form, RequireAuth/RequireRole, AuthProvider, api client
+apps/                         generated apps (self-contained router+page+test);
+                              it-assets is the reference example
+/templates/internal-app/      template copied by `npm run new-app`
+frontend/src/                 React app (generated client, pages, app discovery)
 ```
+
+AGENTS.md at the repo root documents the conventions generated apps must
+follow and how the auto-mount works.
 
 ## Tests
 
 ```bash
-npm test   # backend pytest
+npm test   # pytest backend/tests + apps/*/backend/test_*.py
 ```

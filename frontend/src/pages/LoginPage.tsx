@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, API_BASE } from "../api/client";
-import { useAuth } from "../auth/AuthContext";
-import { Form, FormField } from "../components/Form";
+import { useAuth } from "@portal/platform";
+import { Form, FormField } from "@portal/platform";
 
 interface SeedUser {
   id: number;

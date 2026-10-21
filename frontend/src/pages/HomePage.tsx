@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api/client";
-import { useAuth } from "../auth/AuthContext";
+import { useAuth } from "@portal/platform";
+import { appMetas } from "../apps";
 import type { components } from "../api/schema";
 
 type Tool = components["schemas"]["ToolOut"];
@@ -110,7 +111,16 @@ export default function HomePage() {
             </Link>
           );
         })}
-        {tools.length === 0 && (
+        {appMetas
+          .filter((m) => !m.roles || m.roles.includes(user?.role ?? ""))
+          .map((m) => (
+            <Link key={m.path} to={m.path} className="tool-card card">
+              <h3>{m.title}</h3>
+              <p className="muted">{m.description}</p>
+              <span className="tool-open">Open →</span>
+            </Link>
+          ))}
+        {tools.length === 0 && appMetas.length === 0 && (
           <p className="muted">No tools available for your role.</p>
         )}
       </div>

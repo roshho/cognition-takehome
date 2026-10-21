@@ -3,13 +3,18 @@
   "private": true,
   "version": "0.1.0",
   "description": "Proof of concept: internal tools as normal code (FastAPI + React/TS).",
+  "workspaces": [
+    "frontend",
+    "packages/platform/web"
+  ],
   "scripts": {
-    "setup": "cd backend && (test -d .venv || python3 -m venv .venv) && .venv/bin/pip install -r requirements.txt && cd ../frontend && npm install && npm run gen:api",
-    "gen:api": "cd backend && .venv/bin/python scripts/export_openapi.py && cd ../frontend && npm run gen:api",
+    "setup": "cd backend && (test -d .venv || python3 -m venv .venv) && .venv/bin/pip install -r requirements.txt -e ../packages/platform/python && cd .. && npm install && npm run gen:api",
+    "gen:api": "cd backend && .venv/bin/python scripts/export_openapi.py && cd .. && npm run gen:api --workspace frontend",
+    "new-app": "python3 scripts/new_app.py",
     "start": "concurrently -n api,web -c blue,green \"npm run dev:api\" \"npm run dev:web\"",
     "dev:api": "cd backend && .venv/bin/uvicorn app.main:app --reload --port 8000",
-    "dev:web": "cd frontend && npm run dev",
-    "test": "cd backend && .venv/bin/python -m pytest tests -q"
+    "dev:web": "npm run dev --workspace frontend",
+    "test": "cd backend && .venv/bin/python -m pytest tests ../apps -q"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

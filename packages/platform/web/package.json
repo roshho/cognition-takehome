@@ -1,0 +1,16 @@
+{
+  "name": "@portal/platform",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Shared frontend platform for Meridian internal tools: shell, table/form components, auth context, api client factory.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "peerDependencies": {
+    "openapi-fetch": "^0.13.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.30.0"
+  }
+}

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
-import DataTable from "../components/DataTable";
+import { DataTable } from "@portal/platform";
 
 interface Row {
   id: number;

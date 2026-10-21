@@ -1,31 +1,8 @@
-import createClient from "openapi-fetch";
+import { createPortalClient } from "@portal/platform";
 import type { paths } from "./schema";
 
-const TOKEN_KEY = "portal.token";
+// App-local typed client (generated from backend/openapi.json).
+// Generated apps under apps/ use @portal/platform's untypedApi instead.
+export const api = createPortalClient<paths>();
 
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY);
-}
-
-export function setToken(token: string | null) {
-  if (token) localStorage.setItem(TOKEN_KEY, token);
-  else localStorage.removeItem(TOKEN_KEY);
-}
-
-// In dev, "/" is proxied to FastAPI by vite. In the docker image the static
-// build points at the API container's published port via VITE_API_URL.
-export const API_BASE = import.meta.env.VITE_API_URL ?? "";
-const baseUrl = API_BASE || "/";
-
-export const api = createClient<paths>({
-  baseUrl,
-  headers: { Accept: "application/json" },
-});
-
-api.use({
-  onRequest({ request }) {
-    const token = getToken();
-    if (token) request.headers.set("Authorization", `Bearer ${token}`);
-    return request;
-  },
-});
+export { API_BASE, getToken, setToken } from "@portal/platform";

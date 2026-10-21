@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { api } from "../api/client";
-import { useAuth } from "../auth/AuthContext";
-import { Form, FormField } from "../components/Form";
+import { useAuth } from "@portal/platform";
+import { Form, FormField } from "@portal/platform";
 
 export default function ProfilePage() {
   const { user, refresh } = useAuth();

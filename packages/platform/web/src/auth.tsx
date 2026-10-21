@@ -1,12 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { api, getToken, setToken } from "../api/client";
+import type { Client } from "openapi-fetch";
+import { getToken, setToken } from "./api";
 
 export interface User {
   id: number;
   username: string;
   display_name: string;
-  role: "reviewer" | "admin" | string;
+  role: "reviewer" | "admin" | "read_only" | string;
 }
 
 interface AuthState {
@@ -19,7 +20,12 @@ interface AuthState {
 
 const AuthContext = createContext<AuthState | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+/**
+ * Session auth provider. `api` is the app's portal client (typed or
+ * untyped); it must expose GET /api/me and POST /api/auth/{login,logout},
+ * which every platform backend provides.
+ */
+export function AuthProvider({ api, children }: { api: Client<any>; children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -29,7 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
       return;
     }
-    const { data, error } = await api.GET("/api/me");
+    const { data, error } = await api.GET("/api/me", {});
     if (error || !data) {
       setToken(null);
       setUser(null);
@@ -37,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(data as User);
     }
     setLoading(false);
-  }, []);
+  }, [api]);
 
   useEffect(() => {
     // SSO handoff: the OIDC callback lands here with ?sso_token=...
@@ -56,20 +62,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
-  const login = useCallback(async (username: string) => {
-    const { data, error } = await api.POST("/api/auth/login", {
-      body: { username },
-    });
-    if (error || !data) throw new Error("Login failed");
-    setToken(data.token);
-    setUser(data.user as User);
-  }, []);
+  const login = useCallback(
+    async (username: string) => {
+      const { data, error } = await api.POST("/api/auth/login", {
+        body: { username },
+      });
+      if (error || !data) throw new Error("Login failed");
+      setToken(data.token);
+      setUser(data.user as User);
+    },
+    [api]
+  );
 
   const logout = useCallback(async () => {
-    await api.POST("/api/auth/logout");
+    await api.POST("/api/auth/logout", {});
     setToken(null);
     setUser(null);
-  }, []);
+  }, [api]);
 
   return (
     <AuthContext.Provider value={{ user, loading, login, logout, refresh }}>
