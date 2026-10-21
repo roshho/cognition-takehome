@@ -8,6 +8,47 @@ internal tools as **normal code** instead of using a low-code platform.
 - **Frontend:** React + TypeScript. The API client (`src/api/schema.d.ts`) is
   generated from the OpenAPI spec — no hand-written types.
 
+## Scope & positioning
+
+**What this MVP shows:** three representative internal tools (a KYC review
+queue, a refunds dashboard and a feature-flag panel) built as normal code with
+production-style controls:
+
+- OIDC login (authentication) against a configurable issuer, tested against
+  the in-repo mock IdP only
+- Backend-enforced RBAC: a `require_permission` dependency on every endpoint;
+  `read_only` can view but not mutate
+- An append-only audit log written in the same transaction as each change,
+  including PII reads
+- Swappable data sources: the KYC app goes through a `KycRepository`
+  interface (SQL adapter, plus a Dataverse adapter tested against mocked HTTP
+  only)
+
+The shared infrastructure is extracted into `packages/platform`, with a
+template and a one-command generator (`npm run new-app`) for new apps.
+
+**What it does not show:**
+
+- **Cost.** No cost, licensing or hosting comparison with Power Apps was done.
+  Savings are a hypothesis, not a result.
+- **Fidelity to real apps.** The tools are built to a spec. They are not
+  replicas of existing Power Apps.
+- **Full extraction.** Only the shared layer was extracted. The three built-in
+  tools still live in `backend/app/` and `frontend/src/pages/`.
+  `apps/it-assets` is the only app in the generated self-contained format.
+- **Adapters everywhere.** Only KYC uses the repository adapter. Refunds and
+  flags still query SQLite directly.
+- **Coexistence with Power Apps.** The Dataverse adapter is the intended hook
+  for running alongside existing Dataverse-backed apps during a migration, but
+  it has never run against a real Dataverse environment.
+- **Production hosting.** The portal runs locally or via docker-compose only.
+  See "Known gaps" for the auth, session and audit shortcuts.
+- **Non-engineer app building.** There is no low-code or no-code UI, and no
+  agentic workflow composition. `AGENTS.md` plus the generator are the
+  groundwork for agent-built apps.
+- **UI test automation.** Tests are backend-only. There is no automated
+  frontend or end-to-end suite.
+
 ## Run it
 
 ```bash
